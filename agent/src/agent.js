@@ -8,6 +8,48 @@ import { mineKeywords, slugify } from './tools/keywords.js';
 import { writeArticle } from './tools/writer.js';
 import { seoScore, addInternalLinks, refreshWithLLM } from './tools/seo.js';
 import { activeProviderName } from './providers.js';
+import { submitUrls } from './tools/indexnow.js';
+
+/**
+ * ROTATION AUTO des contenus (chaque cycle) :
+ *  - mode purge (CONTENT_MAX=0) : tous les contenus sont supprimés,
+ *    l'agent en recrée ensuite de nouveaux sur les recherches du moment.
+ *  - mode inventaire (CONTENT_MAX>0) : on garde les N contenus les plus
+ *    récents, les plus anciens (au-delà de la rétention) sont supprimés.
+ * Dans les deux cas, les slugs supprimés sont mémorisés pour ne jamais
+ * être recréés -> le catalogue tourne en permanence vers de nouveaux sujets.
+ */
+async function rotate({ purge = false, say = () => {} }) {
+  const { contentMax, retentionHours, enabled } = config.rotation;
+  if (!enabled) return 0;
+
+  const all = await store.listArticles({ limit: 5000 });
+  let victims = [];
+
+  if (purge || contentMax === 0) {
+    // purge complète : tous les contenus existants
+    victims = all;
+  } else {
+    const over = all.length - contentMax;
+    if (over <= 0) return 0;
+    const cutoff = Date.now() - retentionHours * 3600 * 1000;
+    victims = all
+      .slice()
+      .sort((a, b) => Date.parse(a.created_at || 0) - Date.parse(b.created_at || 0))
+      .filter((a) => Date.parse(a.created_at || 0) < cutoff)
+      .slice(0, over);
+  }
+
+  for (const a of victims) {
+    await store.retireArticle(a.slug);
+    say(`rotation: contenu supprimé -> /blog/${a.slug}`);
+  }
+  if (victims.length) {
+    const rest = (await store.listArticles({ limit: 5000 })).length;
+    say(`rotation: ${victims.length} ancien(s) contenu(s) supprimé(s) — inventaire: ${rest}`);
+  }
+  return victims.length;
+}
 
 let running = false;
 export const isRunning = () => running;
@@ -21,6 +63,7 @@ export async function runCycle({ mode = 'full' } = {}) {
   let updated = 0;
   let tasksDone = 0;
   let provider = 'template';
+  const createdSlugs = [];
 
   try {
     const say = (m) => {
@@ -29,11 +72,18 @@ export async function runCycle({ mode = 'full' } = {}) {
       console.log('[agent]', line);
     };
 
+    // 0) ROTATION (purge) : si mode purge, on vide le catalogue AVANT de réécrire
+    let purged = 0;
+    if (mode === 'full' && config.rotation.contentMax === 0) {
+      purged = await rotate({ purge: true, say });
+    }
+
     // 1) File de tâches vide ? -> on mine de nouveaux mots-clés longue traîne
     let pending = await store.listTasks({ status: 'pending', limit: 20 });
     if (pending.length < 3) {
-      const existing = await store.listArticles({ limit: 500 });
-      const excludeSlugs = existing.map((a) => a.slug);
+      const existing = await store.listArticles({ limit: 5000 });
+      const retired = await store.listRetiredSlugs();
+      const excludeSlugs = [...existing.map((a) => a.slug), ...retired];
       const ideas = mineKeywords({ excludeSlugs, limit: 15 });
       const fresh = await store.addTasks(
         ideas.map((i) => ({ type: 'write', keyword: i.keyword, slug: i.slug, category: i.category, priority: i.priority, payload: { slug: i.slug } }))
@@ -43,7 +93,7 @@ export async function runCycle({ mode = 'full' } = {}) {
     }
 
     // 2) Rédaction : jusqu'à MAX_PER_CYCLE articles par cycle
-    const maxPerCycle = parseInt(process.env.MAX_ARTICLES_PER_CYCLE || '1', 10);
+    const maxPerCycle = config.maxArticlesPerCycle;
     let processed = 0;
     for (const task of pending) {
       if (processed >= maxPerCycle) break;
@@ -72,6 +122,7 @@ export async function runCycle({ mode = 'full' } = {}) {
         final.seo_score = seoScore(final);
         await store.upsertArticle(final);
         created++;
+        createdSlugs.push(final.slug);
         tasksDone++;
         say(`article créé: /blog/${final.slug} (${final.word_count} mots, score ${final.seo_score}, provider ${provider})`);
         await store.updateTask(task.id, { status: 'done', error: '' });
@@ -118,13 +169,25 @@ export async function runCycle({ mode = 'full' } = {}) {
       }
 
       // 4) Re-score global (contrôle qualité permanent)
-      const all = await store.listArticles({ limit: 100 });
+      const all = await store.listArticles({ limit: 5000 });
       for (const a of all) {
         const s = seoScore(a);
         if (s !== a.seo_score) {
           await store.upsertArticle({ ...a, seo_score: s });
           updated++;
         }
+      }
+
+      // 5) ROTATION (mode inventaire) : purge des contenus au-delà de CONTENT_MAX
+      if (config.rotation.contentMax > 0) {
+        purged += await rotate({ say });
+      }
+
+      // 6) IndexNow : indexation automatique des nouveaux contenus (Google/Bing)
+      if (createdSlugs.length) {
+        const urls = createdSlugs.map((sl) => `${config.siteUrl.replace(/\/$/, '')}/blog/${sl}`);
+        const inow = await submitUrls(urls);
+        say(`indexnow: ${inow.submitted}/${urls.length} URL soumise(s)${inow.status ? ` (HTTP ${inow.status})` : ''}${inow.error ? ` — ${inow.error}` : ''}`);
       }
     }
 
@@ -139,7 +202,7 @@ export async function runCycle({ mode = 'full' } = {}) {
       log: log.slice(-30),
     });
 
-    return { ok: true, created, updated, tasksDone, provider, log };
+    return { ok: true, created, updated, tasksDone, provider, purged, slugs: createdSlugs, log };
   } catch (e) {
     say(`cycle en erreur: ${e.message}`);
     await store.recordRun({

@@ -90,6 +90,37 @@ Le frontend a un repli : si l'agent est en veille → **seed embarqué** (le sit
 
 ---
 
+## 🔄 Boucle autonome 24h/24 (mode sans intervention)
+
+Chaque cycle (`RUN_INTERVAL_MINUTES=30` par défaut), l'agent exécute **tout seul** :
+
+1. **Rotation des contenus** — les anciens contenus sont **supprimés**, les nouveaux
+   prennent leur place :
+   - `CONTENT_MAX=40` (défaut) : inventaire de 40 contenus les plus récents,
+     les plus vieux sont supprimés au-delà de `RETENTION_HOURS=6` h de rétention
+   - `CONTENT_MAX=0` : **purge complète à chaque cycle** — tous les contenus sont
+     supprimés puis recréés sur les recherches du moment
+   - les slugs supprimés sont mémorisés : jamais recréés → le catalogue tourne
+     en permanence vers de **nouvelles questions**
+2. **Mining des recherches fréquentes** — mots-clés en forme de *question*
+   (« comment ça marche », « est-ce que c'est sûr », « quel est le meilleur »…)
+   croisés avec les pays/villes africaines → réponses aux questions People-Also-Ask
+3. **Rédaction** — `MAX_ARTICLES_PER_CYCLE=1` article complet (titre SEO, meta,
+   FAQ 5 Q/R, liens internes, score)
+4. **Rafraîchissement SEO** d'un ancien contenu + re-score de tout le catalogue
+5. **Publication automatique** en base + **IndexNow** → Google/Bing indexent les
+   nouvelles URLs en quelques minutes
+
+Variable d'indexation rapide : `INDEXNOW_KEY` (clé hébergée dans
+`web/public/indexnow.key.txt`, identique dans l'agent).
+
+> **Pourquoi pas une purge totale par défaut ?** Google ré-indexe et ré-évalue
+> chaque URL supprimée : un catalogue à 1-2 articles limite la profondeur du
+> sitemap. Le mode inventaire (40) fait tourner 100 % du contenu en ~20 h tout
+> en gardant un site dense. `CONTENT_MAX=0` reste disponible pour du 100 % purge.
+
+---
+
 ## 🎛️ Contrôle du site — `/admin`
 
 Dashboard protégé par `ADMIN_TOKEN` :

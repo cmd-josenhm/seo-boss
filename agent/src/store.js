@@ -79,6 +79,12 @@ CREATE TABLE IF NOT EXISTS page_views (
   PRIMARY KEY (path, day)
 );
 
+CREATE TABLE IF NOT EXISTS retired_slugs (
+  slug       TEXT PRIMARY KEY,
+  title      TEXT,
+  retired_at TEXT DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS settings (
   key        TEXT PRIMARY KEY,
   value      TEXT,
@@ -280,6 +286,31 @@ export const store = {
     `).run(key, JSON.stringify(value));
   },
 
+  // ----------------------- rotation --------------------------
+  /**
+   * Supprime définitivement un contenu et mémorise son slug
+   * pour ne jamais le recréer (mining exclut les slugs retirés).
+   */
+  async retireArticle(article) {
+    const slug = typeof article === 'string' ? article : article?.slug;
+    if (!slug) return false;
+    db.prepare(`
+      INSERT OR IGNORE INTO retired_slugs (slug, title, retired_at)
+      VALUES (?, ?, datetime('now'))
+    `).run(slug, typeof article === 'object' ? article.title || '' : '');
+    db.prepare('DELETE FROM articles WHERE slug = ?').run(slug);
+    return true;
+  },
+
+  /** Slugs déjà tournés (exclus du mining pour éviter les doublons). */
+  async listRetiredSlugs() {
+    return db.prepare('SELECT slug FROM retired_slugs').all().map((r) => r.slug);
+  },
+
+  async retiredCount() {
+    return db.prepare('SELECT COUNT(*) c FROM retired_slugs').get().c;
+  },
+
   // --------------------- statistiques vues --------------------
   /** Enregistre une vue (beacon du frontend, best-effort). */
   async addView(pathName) {
@@ -311,6 +342,7 @@ export const store = {
       tasks_pending: one("SELECT COUNT(*) c FROM agent_tasks WHERE status = 'pending'"),
       tasks_failed: one("SELECT COUNT(*) c FROM agent_tasks WHERE status = 'failed'"),
       runs: one('SELECT COUNT(*) c FROM agent_runs'),
+      retired: one('SELECT COUNT(*) c FROM retired_slugs'),
       db_size_kb: Math.round(
         (sizeOf(DB_PATH) + sizeOf(DB_PATH + '-wal') + sizeOf(DB_PATH + '-shm')) / 1024
       ),

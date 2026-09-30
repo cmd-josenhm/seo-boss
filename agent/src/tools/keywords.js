@@ -90,6 +90,15 @@ const INTENTS = [
   { f: (k, m) => `${lower(k)} pour débutants ${m}`, p: 7 },
   { f: (k, m) => `${lower(k)} alternative gratuite ${m}`, p: 7 },
   { f: (k, m) => `${lower(k)} astuces ${m}`, p: 6 },
+  // --- intentions "question" (recherches fréquentes / People Also Ask) ---
+  { f: (k, m) => `pourquoi ${lower(k)} ${m}`, p: 7 },
+  { f: (k, m) => `comment ça marche ${lower(k)} ${m}`, p: 8 },
+  { f: (k, m) => `est-ce que ${lower(k)} est sûr ${m}`, p: 7 },
+  { f: (k, m) => `quel est le meilleur ${lower(k)} ${m}`, p: 8 },
+  { f: (k, m) => `où trouver ${lower(k)} ${m}`, p: 6 },
+  { f: (k, m) => `${lower(k)} avis et témoignages ${m}`, p: 6 },
+  { f: (k, m) => `quand utiliser ${lower(k)} ${m}`, p: 5 },
+  { f: (k, m) => `${lower(k)} free ou payant ${m}`, p: 6 },
 ];
 
 const lower = (s) => s.charAt(0).toLowerCase() + s.slice(1);
@@ -101,6 +110,18 @@ const slugify = (s) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 80);
+
+/** mélange déterministe (seed = heure) pour varier les sujets à chaque cycle */
+function seededShuffle(arr, seed) {
+  const out = arr.slice();
+  let a = seed >>> 0;
+  for (let i = out.length - 1; i > 0; i--) {
+    a = (a + 0x6d2b79f5) >>> 0;
+    const j = a % (i + 1);
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
 
 /** Génère un pool de mots-clés longue traîne (round-robin sur les catégories). */
 export function mineKeywords({ excludeSlugs = [], limit = 40 } = {}) {
@@ -122,7 +143,8 @@ export function mineKeywords({ excludeSlugs = [], limit = 40 } = {}) {
         i++;
       }
     }
-    perCat.push(list);
+    // mélange : les intentions "question" sont échantillonnées dès le début
+    perCat.push(seededShuffle(list, (base + gi * 131) >>> 0));
     gi += 7;
   }
 

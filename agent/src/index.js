@@ -51,6 +51,17 @@ app.get('/status', async (_req, res) => {
         db_size_kb: stats.db_size_kb,
       },
       traffic: views,
+      rotation: {
+        enabled: config.rotation.enabled,
+        content_max: config.rotation.contentMax, // 0 = purge complète à chaque cycle
+        retention_hours: config.rotation.retentionHours,
+        cycle_minutes: config.runIntervalMinutes,
+        retired_total: stats.retired,
+      },
+      indexnow: {
+        enabled: config.indexnow.enabled,
+        key_location: `${config.siteUrl.replace(/\/$/, '')}/indexnow.key.txt`,
+      },
       last_runs: runs,
       categories: Object.entries(CATEGORIES).map(([k, v]) => ({ id: k, label: v.label })),
     });

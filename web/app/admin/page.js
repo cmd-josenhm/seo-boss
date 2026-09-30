@@ -167,6 +167,15 @@ export default function AdminPage() {
           automatique toutes les <b>{agent?.interval_minutes ?? '—'} min</b> · Auto-publication :{' '}
           <b>{agent?.auto_publish ? 'oui' : 'non'}</b>
         </p>
+        <p style={{ color: 'var(--muted)', fontSize: '0.92rem', marginTop: -6 }}>
+          🔄 <b>Rotation autonome :</b>{' '}
+          {agent?.rotation?.enabled
+            ? agent.rotation.content_max === 0
+              ? 'purge complète à chaque cycle (tous les contenus supprimés puis recréés)'
+              : `inventaire max ${agent.rotation.content_max} contenus · rétention ${agent.rotation.retention_hours} h · ${agent.rotation.retired_total} contenus tournés`
+            : 'désactivée'}{' '}
+          · 🚀 <b>IndexNow :</b> {agent?.indexnow?.enabled ? 'indexation auto Google/Bing' : 'off'}
+        </p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button className="btn" onClick={triggerRun} disabled={running || !token}>
             {running ? '⏳ Génération en cours…' : '⚡ Générer / optimiser maintenant'}
@@ -191,6 +200,20 @@ export default function AdminPage() {
             />
             <Row ok={site.agent_configured} label="Agent IA connecté" hint="AGENT_BASE_URL (Render)" />
             <Row ok={(agent?.counts?.published || 0) > 0} label="Contenu publié" hint="au moins 1 article en ligne" />
+            <Row
+              ok={agent?.rotation?.enabled !== false}
+              label="Rotation autonome des contenus"
+              hint={
+                agent?.rotation
+                  ? `cycle ${agent.rotation.cycle_minutes} min · max ${agent.rotation.content_max || 'PURGE'} · ${agent.rotation.retired_total} tournés`
+                  : 'suppression des anciens + nouveaux contenus à chaque cycle'
+              }
+            />
+            <Row
+              ok={agent?.indexnow?.enabled !== false}
+              label="IndexNow (indexation auto Google/Bing)"
+              hint={agent?.indexnow?.key_location || 'soumission des nouvelles URLs après chaque cycle'}
+            />
             <Row ok={avgSeo >= 70} label="Score SEO moyen ≥ 70" hint={`actuel : ${avgSeo || 0}`} />
             <Row ok label="Sitemap XML + robots.txt + RSS" hint="générés automatiquement par Next.js" />
             <Row ok label="Données structurées (Article, FAQ, Breadcrumb)" hint="rich results Google" />
