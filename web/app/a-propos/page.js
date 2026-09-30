@@ -1,43 +1,63 @@
-import { SITE } from '@/lib/site';
+import Link from 'next/link';
+import { SITE, CATEGORIES, DEVIS_URL } from '@/lib/site';
 
 export const metadata = {
   title: 'À propos',
-  description: `Découvrez ${SITE.name} : notre mission, notre audience et la façon dont notre agent IA produit des guides utiles pour l'Afrique.`,
+  description: `Découvrez ${SITE.name} : notre mission, notre audience et notre méthode éditoriale.`,
   alternates: { canonical: '/a-propos' },
 };
 
 export default function AboutPage() {
   return (
-    <div className="container narrow page-title">
-      <h1>À propos de {SITE.name}</h1>
-      <div className="content" style={{ marginTop: 18 }}>
+    <div className="container narrow">
+      <div className="page-head">
+        <h1>À propos de {SITE.name}</h1>
         <p>
-          <strong>{SITE.name}</strong> est un média numérique francophone dédié à l’audience
-          africaine : jeunes, étudiants, freelances, commerçants et entrepreneurs qui veulent
-          maîtriser le numérique pour améliorer leur quotidien.
+          Un média numérique francophone dédié à l&apos;audience africaine : jeunes, étudiants,
+          freelances, commerçants et entrepreneurs.
         </p>
+      </div>
+
+      <div className="prose-card" style={{ marginTop: 24 }}>
         <h2>Notre mission</h2>
         <p>
-          Rendre l’information technique simple, actionnable et adaptée au terrain africain —
-          mobile money, outils d’IA gratuits, revenus en ligne, business locaux et réseaux sociaux.
-          Chaque guide répond à une question concrète : « comment faire », « combien ça coûte »,
-          « quelle alternative ».
+          Rendre l&apos;information utile simple, actionnable et adaptée au terrain africain : vie
+          spirituelle au quotidien, outils d&apos;IA gratuits, revenus en ligne, business locaux et
+          réseaux sociaux. Chaque guide répond à une question concrète : « comment faire »,
+          « combien ça coûte », « quelle alternative ».
         </p>
-        <h2>Un site amélioré en continu par l’IA</h2>
-        <p>
-          Nos contenus sont produits et optimisés par un <strong>agent IA open-source</strong>
-          qui tourne 24h/24 : il identifie les recherches populaires en Afrique, rédige de nouveaux
-          articles, met à jour les contenus existants, vérifie les scores SEO, crée les liens
-          internes et publie automatiquement. Un tableau de bord permet de superviser et de
-          intervenir à tout moment.
-        </p>
-        <h2>Notre promesse éditoriale</h2>
+
+        <h2>Nos thématiques</h2>
         <ul>
-          <li>Des conseils applicables immédiatement, sans jargon inutile.</li>
-          <li>Des exemples locaux (opérateurs, prix, villes africaines).</li>
-          <li>La transparence : chaque article est daté et régulièrement révisé.</li>
-          <li>Le respect de votre vie privée (mesure d’audience anonyme).</li>
+          {CATEGORIES.map((c) => (
+            <li key={c.id}>
+              <Link href={`/category/${c.id}`}>{c.label}</Link> — {c.desc}
+            </li>
+          ))}
         </ul>
+
+        <h2>Notre méthode éditoriale</h2>
+        <p>
+          Les contenus sont produits et enrichis en continu par notre agent IA open-source, puis
+          conservés : <strong>aucun article publié n&apos;est supprimé</strong>, les nouveaux
+          s&apos;ajoutent aux précédents. Les anciens guides sont mis à jour régulièrement
+          (informations, liens, structure) afin de rester exacts et utiles.
+        </p>
+
+        <h2>Corrections et suggestions</h2>
+        <p>
+          Une information à corriger, un sujet à proposer ? Écrivez-nous depuis la page{' '}
+          <Link href="/contact">Contact</Link> : les corrections sont traitées en priorité.
+        </p>
+
+        <h2>Création de sites web</h2>
+        <p>
+          Vous avez besoin d&apos;un site web, d&apos;un blog ou d&apos;une boutique en ligne ?{' '}
+          <a href={DEVIS_URL} target="_blank" rel="noopener noreferrer">
+            Demandez un devis gratuit
+          </a>
+          .
+        </p>
       </div>
     </div>
   );

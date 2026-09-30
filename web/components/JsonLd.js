@@ -1,5 +1,6 @@
 /** Injecte un bloc JSON-LD (données structurées Google). */
 export default function JsonLd({ data }) {
+  if (!data) return null;
   return (
     <script
       type="application/ld+json"
@@ -8,12 +9,12 @@ export default function JsonLd({ data }) {
   );
 }
 
-export const siteJsonLd = (url) => ({
+export const siteJsonLd = (url, name = 'BuzzAfrique') => ({
   '@context': 'https://schema.org',
   '@graph': [
     {
       '@type': 'WebSite',
-      name: 'BuzzAfrique',
+      name,
       url,
       inLanguage: 'fr',
       potentialAction: {
@@ -24,9 +25,15 @@ export const siteJsonLd = (url) => ({
     },
     {
       '@type': 'Organization',
-      name: 'BuzzAfrique',
+      name,
       url,
-      logo: `${url}/icon.png`,
+      // logo servi par le site (fichier réel : plus de 404)
+      logo: {
+        '@type': 'ImageObject',
+        url: `${url}/icon.svg`,
+        width: 512,
+        height: 512,
+      },
     },
   ],
 });
@@ -42,8 +49,14 @@ export const articleJsonLd = (a, url) => ({
   wordCount: a.word_count,
   datePublished: a.published_at || a.created_at,
   dateModified: a.updated_at || a.published_at || a.created_at,
-  author: { '@type': 'Organization', name: 'BuzzAfrique' },
-  publisher: { '@type': 'Organization', name: 'BuzzAfrique' },
+  // image générée dynamiquement par le site (voir app/blog/[slug]/opengraph-image.js)
+  image: [`${url}/blog/${a.slug}/opengraph-image`],
+  author: { '@type': 'Organization', name: a.author || 'BuzzAfrique' },
+  publisher: {
+    '@type': 'Organization',
+    name: 'BuzzAfrique',
+    logo: { '@type': 'ImageObject', url: `${url}/icon.svg` },
+  },
   mainEntityOfPage: `${url}/blog/${a.slug}`,
 });
 

@@ -1,4 +1,4 @@
-// Généré automatiquement par agent/src/demo.js — contenu de secours du site (fallback hors-ligne)
+// Catalogue de secours du site (fallback hors-ligne) — généré par agent/src/export-seed.js
 export const SEED_ARTICLES = [
   {
     "slug": "chatgpt-guide-complet-au-rwanda",

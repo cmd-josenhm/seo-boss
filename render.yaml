@@ -5,12 +5,23 @@ services:
     name: seo-boss-agent
     runtime: node
     rootDir: agent
-    # Déploie la branche principale (PR #1 mergée dans main)
     branch: main
     autoDeploy: true
     buildCommand: npm install --no-audit --no-fund
     startCommand: npm start
     healthCheckPath: /health
+    # ---------------------------------------------------------------------------
+    # PERSISTANCE (fortement recommandé) — décommenter les 2 blocs ci-dessous
+    # pour conserver la base SQLite entre deux redéploiements/réveils.
+    # ⚠️ Un disque Render nécessite un plan payant (starter). Sans lui, la base
+    # est réinitialisée à chaque redémarrage : le site reste complet grâce au
+    # catalogue de secours (web/lib/seed.js) mais l'agent repart de zéro.
+    # ---------------------------------------------------------------------------
+    # plan: starter
+    # disk:
+    #   name: seo-boss-data
+    #   mountPath: /var/data
+    #   sizeGB: 1
     envVars:
       - key: NODE_VERSION
         value: "22"
@@ -18,15 +29,41 @@ services:
         generateValue: true
       - key: SITE_URL
         value: "https://buzzafrique.vercel.app"
-      # Base de données SQLite intégrée (aucun service externe).
-      # Sur un plan payant Render, attacher un Disk et définir :
-      #   DB_PATH=/var/data/seo-boss.db
+      # Emplacement de la base SQLite. À passer à /var/data/seo-boss.db
+      # quand le disque persistant ci-dessus est activé.
+      - key: DB_PATH
+        value: /opt/render/project/src/agent/data/seo-boss.db
       - key: RUN_INTERVAL_MINUTES
         value: "30"
       - key: AUTO_PUBLISH
         value: "true"
       - key: MAX_ARTICLES_PER_CYCLE
-        value: "1"
+        value: "2"
+      # Modèle « bibliothèque » : 0 = aucun plafond, les anciens articles sont conservés
+      - key: CATALOG_MAX
+        value: "0"
       # ---- Secret à ajouter APRÈS création du service ----
       # Dashboard → seo-boss-agent → Environment → Add Environment Variable :
       #   GROQ_API_KEY = gsk_...   (LLM gratuit Llama 3.3 — qualité des articles)
+
+# -----------------------------------------------------------------------------
+# CADENCE 24h/24 — décommenter pour créer un cron Render qui réveille l'agent
+# toutes les 30 min (facturation Render possible selon le plan).
+# Alternative 100 % gratuite : cron-job.org / UptimeRobot qui appelle
+#   POST https://seo-boss-agent.onrender.com/run   avec l'en-tête x-agent-token
+# -----------------------------------------------------------------------------
+#  - type: cron
+#    name: seo-boss-tick
+#    runtime: node
+#    rootDir: agent
+#    schedule: "*/30 * * * *"
+#    buildCommand: npm install --no-audit --no-fund
+#    startCommand: node src/tick.js
+#    envVars:
+#      - key: AGENT_URL
+#        value: "https://seo-boss-agent.onrender.com"
+#      - key: AGENT_TOKEN
+#        fromService:
+#          name: seo-boss-agent
+#          type: web
+#          envVarKey: AGENT_TOKEN

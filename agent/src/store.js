@@ -286,23 +286,13 @@ export const store = {
     `).run(key, JSON.stringify(value));
   },
 
-  // ----------------------- rotation --------------------------
-  /**
-   * Supprime définitivement un contenu et mémorise son slug
-   * pour ne jamais le recréer (mining exclut les slugs retirés).
-   */
-  async retireArticle(article) {
-    const slug = typeof article === 'string' ? article : article?.slug;
-    if (!slug) return false;
-    db.prepare(`
-      INSERT OR IGNORE INTO retired_slugs (slug, title, retired_at)
-      VALUES (?, ?, datetime('now'))
-    `).run(slug, typeof article === 'object' ? article.title || '' : '');
-    db.prepare('DELETE FROM articles WHERE slug = ?').run(slug);
-    return true;
-  },
+  // ----------------------- catalogue --------------------------
+  // Le module de rotation a été RETIRÉ : la base est une bibliothèque.
+  // Aucun article publié n'est supprimé (voir agent.js / README).
+  // La table `retired_slugs` est conservée uniquement en lecture, pour
+  // exclure du mining les anciens slugs du modèle de purge.
 
-  /** Slugs déjà tournés (exclus du mining pour éviter les doublons). */
+  /** Slugs historiquement retirés (modèle précédent) — exclus du mining. */
   async listRetiredSlugs() {
     return db.prepare('SELECT slug FROM retired_slugs').all().map((r) => r.slug);
   },

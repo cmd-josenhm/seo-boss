@@ -3,55 +3,66 @@ import ArticleCard from '@/components/ArticleCard';
 import { getArticles } from '@/lib/articles';
 import { CATEGORIES } from '@/lib/site';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 300;
 
 export const metadata = {
   title: 'Tous les guides pratiques',
   description:
-    'Guides pratiques mobile money, IA, freelance, business et réseaux sociaux pour réussir en Afrique — mis à jour par notre agent IA.',
+    'Guides pratiques religion, IA, freelance, business et réseaux sociaux pour réussir en Afrique — des contenus conservés et enrichis en continu.',
   alternates: { canonical: '/blog' },
 };
 
 export default async function BlogPage({ searchParams }) {
   const q = (searchParams?.q || '').toLowerCase().trim();
-  let articles = await getArticles({ limit: 200 });
-  if (q) {
-    articles = articles.filter((a) =>
-      [a.title, a.excerpt, a.meta_description, (a.keywords || []).join(' '), (a.tags || []).join(' ')]
-        .join(' ')
-        .toLowerCase()
-        .includes(q)
-    );
-  }
+  const articles = await getArticles({ limit: 500 });
+  const filtered = q
+    ? articles.filter((a) =>
+        [a.title, a.excerpt, a.meta_description, (a.keywords || []).join(' '), (a.tags || []).join(' ')]
+          .join(' ')
+          .toLowerCase()
+          .includes(q)
+      )
+    : articles;
 
   return (
     <div className="container">
-      <div className="page-title">
-        <h1>Guides pratiques</h1>
+      <div className="page-head">
+        <h1>Tous les guides</h1>
         <p>
-          {articles.length} article{articles.length > 1 ? 's' : ''} — recherche continue des
-          meilleurs mots-clés Afrique par l’agent IA.
+          {filtered.length} {filtered.length > 1 ? 'guides' : 'guide'} — un catalogue qui ne perd
+          jamais un article : chaque nouveau contenu s&apos;ajoute aux précédents.
         </p>
       </div>
 
-      <div className="pills" style={{ margin: '18px 0 6px' }}>
-        <Link href="/blog" className="pill" style={{ background: 'var(--ink)', color: '#fff', borderColor: 'var(--ink)' }}>
+      <div className="filter-bar">
+        <Link href="/blog" className="pill is-active">
           Tous
         </Link>
         {CATEGORIES.map((c) => (
           <Link key={c.id} href={`/category/${c.id}`} className="pill">
+            <span className="swatch" style={{ background: c.accent }} />
             {c.label}
           </Link>
         ))}
       </div>
 
+      {q && (
+        <p className="page-head" style={{ paddingTop: 12, color: 'var(--muted)' }}>
+          Recherche : « {q} » — <Link href="/blog">réinitialiser</Link>
+        </p>
+      )}
+
       <section className="section">
         <div className="grid">
-          {articles.map((a) => (
+          {filtered.map((a) => (
             <ArticleCard key={a.slug} article={a} />
           ))}
         </div>
-        {!articles.length && <div className="empty">Aucun article ne correspond à « {q} ».</div>}
+        {!filtered.length && (
+          <div className="empty">
+            Aucun article ne correspond à « {q} ». <Link href="/blog">Voir tous les guides</Link>
+          </div>
+        )}
       </section>
     </div>
   );

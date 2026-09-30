@@ -1,15 +1,21 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getArticle, getRelated, readingTime } from '@/lib/articles';
+import { getArticle, getRelated, getAllSlugs, readingTime } from '@/lib/articles';
 import { SITE, catLabel } from '@/lib/site';
-import { mdToHtml } from '@/lib/md';
+import { mdToHtml, slugifyHeading } from '@/lib/md';
 import ArticleCard from '@/components/ArticleCard';
 import JsonLd, { articleJsonLd, faqJsonLd, breadcrumbJsonLd } from '@/components/JsonLd';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 300;
 
 const fmtDate = (d) =>
   new Date(d).toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' });
+
+/** Pré-génère les articles connus (les nouveaux restent rendus à la demande). */
+export async function generateStaticParams() {
+  const slugs = await getAllSlugs();
+  return slugs.slice(0, 100).map((slug) => ({ slug }));
+}
 
 export async function generateMetadata({ params }) {
   const article = await getArticle(params.slug);
@@ -29,7 +35,11 @@ export async function generateMetadata({ params }) {
       section: catLabel(article.category),
       tags: article.tags,
     },
-    twitter: { card: 'summary_large_image', title: article.title, description: article.meta_description },
+    twitter: {
+      card: 'summary_large_image',
+      title: article.title,
+      description: article.meta_description || article.excerpt,
+    },
   };
 }
 
@@ -64,18 +74,16 @@ export default async function ArticlePage({ params }) {
           <span>{article.title}</span>
         </nav>
         <h1>{article.title}</h1>
-        <div className="meta">
+        <p className="article-lede">{article.excerpt || article.meta_description}</p>
+        <div className="meta-row">
           <span>Par {article.author || 'BuzzAfrique'}</span>
-          <span>•</span>
-          <span>{fmtDate(article.published_at || article.created_at)}</span>
-          <span>•</span>
+          <span className="dot-sep">•</span>
+          <time dateTime={article.published_at || article.created_at}>
+            {fmtDate(article.published_at || article.created_at)}
+          </time>
+          <span className="dot-sep">•</span>
           <span>{readingTime(article)} min de lecture</span>
-          <span>•</span>
-          <span className="score">Score SEO {article.seo_score || '—'}</span>
         </div>
-        <p style={{ fontSize: '1.1rem', color: 'var(--muted)', marginTop: 14 }}>
-          {article.excerpt || article.meta_description}
-        </p>
       </header>
 
       {headings.length >= 3 && (
@@ -95,14 +103,27 @@ export default async function ArticlePage({ params }) {
       <div className="content" dangerouslySetInnerHTML={{ __html: html }} />
 
       <div className="share">
-        <a href={`https://www.facebook.com/sharer/sharer.php?u=${url}`} target="_blank" rel="noopener">
-          Partager sur Facebook
-        </a>
-        <a href={`https://twitter.com/intent/tweet?url=${url}&text=${encodeURIComponent(article.title)}`} target="_blank" rel="noopener">
-          Partager sur X
-        </a>
-        <a href={`https://wa.me/?text=${encodeURIComponent(article.title + ' ' + url)}`} target="_blank" rel="noopener">
+        <a
+          className="wa"
+          href={`https://wa.me/?text=${encodeURIComponent(`${article.title} ${url}`)}`}
+          target="_blank"
+          rel="noopener"
+        >
           Partager sur WhatsApp
+        </a>
+        <a
+          href={`https://www.facebook.com/sharer/sharer.php?u=${url}`}
+          target="_blank"
+          rel="noopener"
+        >
+          Facebook
+        </a>
+        <a
+          href={`https://twitter.com/intent/tweet?url=${url}&text=${encodeURIComponent(article.title)}`}
+          target="_blank"
+          rel="noopener"
+        >
+          X
         </a>
       </div>
 
@@ -121,9 +142,12 @@ export default async function ArticlePage({ params }) {
       {related.length > 0 && (
         <section className="related">
           <div className="section-head">
-            <h2>À lire aussi</h2>
+            <div>
+              <span className="eyebrow">À lire aussi</span>
+              <h2>Guides similaires</h2>
+            </div>
           </div>
-          <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
+          <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 240px), 1fr))' }}>
             {related.map((a) => (
               <ArticleCard key={a.slug} article={a} />
             ))}
@@ -132,13 +156,4 @@ export default async function ArticlePage({ params }) {
       )}
     </article>
   );
-}
-
-function slugifyHeading(s) {
-  return s
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
 }

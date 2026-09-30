@@ -18,24 +18,29 @@ export const config = {
   lang: env('AGENT_LANG', 'fr'),
   maxRunsKeep: 50,
 
-  // --- Rotation autonome des contenus (chaque cycle) ---
-  // enabled  : active la rotation (true)
-  // contentMax : nombre max de contenus en ligne (0 = PURGE COMPLÈTE à chaque cycle,
-  //              tous les contenus sont supprimés puis recréés)
-  // retentionHours : âge minimum (heures) avant suppression en mode inventaire
-  rotation: {
-    enabled: env('ROTATION_ENABLED', 'true') !== 'false',
-    contentMax: Math.max(0, parseInt(env('CONTENT_MAX', '40'), 10)),
-    retentionHours: Math.max(0, parseInt(env('RETENTION_HOURS', '6'), 10)),
+  // --- Catalogue : CROISSANCE UNIQUEMENT -------------------------------------
+  // Les anciens articles ne sont JAMAIS supprimés (modèle « bibliothèque »).
+  //   max = 0  -> aucun plafond : l'agent enrichit le catalogue en continu
+  //   max > 0  -> au-delà de N articles publiés, l'agent arrête de créer de
+  //               NOUVEAUX sujets mais continue de mettre à jour les anciens
+  catalog: {
+    max: Math.max(0, parseInt(env('CATALOG_MAX', '0'), 10)),
   },
 
-  // --- IndexNow : indexation automatique des nouveaux contenus par Google/Bing/Yandex ---
+  // --- IndexNow : indexation automatique par Bing/Yandex/Naver/Seznam ---
+  // (Google ne participe pas à IndexNow : il passe par le sitemap + Search Console)
   indexnow: {
     enabled: env('INDEXNOW_ENABLED', 'true') !== 'false',
     key: env('INDEXNOW_KEY', '0f8c1a2e4b6d4f0aa1b2c3d4e5f60718'),
   },
 
-  maxArticlesPerCycle: Math.max(1, parseInt(env('MAX_ARTICLES_PER_CYCLE', '1'), 10)),
+  maxArticlesPerCycle: Math.max(1, parseInt(env('MAX_ARTICLES_PER_CYCLE', '2'), 10)),
+
+  // Limitation de débit simple (par IP) sur les routes publiques d'écriture
+  rateLimit: {
+    windowMs: 60_000,
+    maxViews: Math.max(1, parseInt(env('RATE_LIMIT_VIEWS_PER_MIN', '40'), 10)),
+  },
 
   // Chaîne de modèles LLM open-source (gratuits) — ordre de priorité
   providers: {
