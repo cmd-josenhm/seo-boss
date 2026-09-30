@@ -11,6 +11,14 @@ const CSP = [
   "form-action 'self'",
 ].join('; ');
 
+const securityHeaders = [
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+  { key: 'Content-Security-Policy', value: CSP },
+];
+
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
@@ -18,14 +26,22 @@ const nextConfig = {
   async headers() {
     return [
       {
+        // Pages publiques : indexation autorisée, extraits et aperçus complets
         source: '/:path*',
-        headers: [
-          { key: 'X-Content-Type-Options', value: 'nosniff' },
-          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
-          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
-          { key: 'Content-Security-Policy', value: CSP },
-        ],
+        headers: securityHeaders,
+      },
+      {
+        // Dashboard et API : jamais indexés (complète le noindex des balises meta)
+        source: '/admin',
+        headers: [...securityHeaders, { key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' }],
+      },
+      {
+        source: '/admin/:path*',
+        headers: [...securityHeaders, { key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' }],
+      },
+      {
+        source: '/api/:path*',
+        headers: [...securityHeaders, { key: 'X-Robots-Tag', value: 'noindex, nofollow' }],
       },
     ];
   },

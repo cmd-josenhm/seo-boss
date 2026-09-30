@@ -1,5 +1,8 @@
 # ✅ Corrections appliquées — suite à `AUDIT-PROD.md`
 
+> **Ajout** : vérification Google Search Console + ouverture maximale à l'indexation
+> (voir la section « Search Console & indexation Google » en fin de document).
+
 Tout ce qui pouvait être corrigé dans le code l'a été. Les points restants dépendent
 d'actions dans vos dashboards (Render / Vercel / Search Console) : ils sont listés en bas
 avec la marche à suivre exacte.
@@ -76,6 +79,52 @@ Fichiers : `agent/src/agent.js`, `agent/src/store.js`, `agent/src/config.js`,
 - Les erreurs sont **visibles** (encart rouge) au lieu d'être avalées.
 - Nouveau : taille du catalogue, bouton de sauvegarde, checklist mise à jour
   (IndexNow = Bing/Yandex/Naver/Seznam, Search Console, catalogue conservé).
+
+---
+
+## 🔎 Search Console & indexation Google
+
+### Fichier de vérification (en place)
+
+`web/public/googleca9a26427c93ab29.html` → servi à
+**`https://buzzafrique.vercel.app/googleca9a26427c93ab29.html`** (racine du site, méthode « fichier HTML »).
+
+Contenu du fichier (format exigé par Google) :
+`google-site-verification: googleca9a26427c93ab29.html`
+
+> La balise `<meta name="google-site-verification">` est également câblée
+> (`GOOGLE_SITE_VERIFICATION` dans Vercel) si vous activez un jour la méthode « balise HTML » :
+> les deux jetons sont **différents** chez Google, il suffit de coller celui fourni par la console.
+
+### Autorisations d'indexation ajoutées
+
+| Élément | État |
+|---|---|
+| `robots.txt` — groupes explicites `Googlebot`, `Googlebot-Image`, `Googlebot-News`, `Googlebot-Video`, `Storebot-Google`, `Google-InspectionTool`, `GoogleOther`, `Google-Extended` | ✅ `Allow: /` (seul `/api/` reste exclu) |
+| `robots.txt` — `Sitemap: /sitemap.xml` | ✅ déclaré |
+| Balise `googlebot` | ✅ `index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1` (extraits et aperçus complets) |
+| Toutes les pages publiques | ✅ `index, follow` (vérifié une à une) |
+| `/admin` et `/api/*` | ✅ `noindex` propre — **meta robots + `X-Robots-Tag`** |
+| `robots.txt` — `/admin` | retiré du `Disallow` : une URL bloquée dans robots.txt ne peut pas être lue et peut quand même être indexée. Le `noindex` est la méthode correcte. |
+| Page 404 | ✅ `noindex` |
+| Sitemap | ✅ 21 URLs (pages + catégories peuplées + articles), `lastmod` réels, régénéré toutes les 30 min |
+| RSS `feed.xml` | ✅ indexable (`application/rss+xml`) |
+| Le fichier de vérification | n'est pas dans le sitemap (inutile pour la recherche) |
+
+### À faire une seule fois dans la console (2 minutes)
+
+1. **Fusionner la PR #3** → Vercel déploie (le fichier n'existe en prod qu'après ce déploiement).
+2. Ouvrir `https://buzzafrique.vercel.app/googleca9a26427c93ab29.html` → doit afficher
+   `google-site-verification: googleca9a26427c93ab29.html`.
+3. Search Console → propriété `https://buzzafrique.vercel.app/` → **Vérifier** : ✅.
+4. **Sitemaps** → ajouter `sitemap.xml` → Envoyer.
+5. **Inspection de l'URL** → tester `https://buzzafrique.vercel.app/` puis demander une
+   **indexation** des pages clés (accueil, /blog, 3-4 guides). Google traite ces demandes
+   en quelques heures à quelques jours.
+
+> **Rappel important** : Google **n'utilise pas IndexNow** (contrairement à Bing, Yandex, Naver
+> et Seznam, que l'agent notifie automatiquement). Pour Google, les leviers sont le
+> **sitemap + robots.txt + maillage interne + Search Console** — tous en place.
 
 ---
 

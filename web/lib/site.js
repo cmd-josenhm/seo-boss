@@ -11,7 +11,11 @@ export const SITE = {
   twitter: '@buzzafrique',
   email: 'contact@buzzafrique.com',
   gaId: process.env.NEXT_PUBLIC_GA_ID || '',
+  // Vérification Google Search Console.
+  // Méthode « fichier HTML » : web/public/<fichier> est servi à la racine du site.
+  // Méthode « balise meta » (optionnelle) : renseigner GOOGLE_SITE_VERIFICATION dans Vercel.
   verification: process.env.GOOGLE_SITE_VERIFICATION || '',
+  verificationFile: 'googleca9a26427c93ab29.html',
   keywords: [
     'Afrique', 'prière', 'religion', 'spiritualité', 'intelligence artificielle',
     'IA gratuite', 'freelance Afrique', 'gagner de l\'argent en ligne', 'business Afrique',

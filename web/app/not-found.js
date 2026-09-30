@@ -1,7 +1,10 @@
 import Link from 'next/link';
 import { CATEGORIES } from '@/lib/site';
 
-export const metadata = { title: 'Page introuvable' };
+export const metadata = {
+  title: 'Page introuvable',
+  robots: { index: false, follow: false },
+};
 
 export default function NotFound() {
   return (

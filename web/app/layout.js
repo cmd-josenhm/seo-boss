@@ -31,7 +31,13 @@ export const metadata = {
   robots: {
     index: true,
     follow: true,
-    googleBot: { index: true, follow: true, 'max-image-preview': 'large', 'max-snippet': -1 },
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+      'max-video-preview': -1,
+    },
   },
   ...(SITE.verification ? { verification: { google: SITE.verification } } : {}),
   icons: { icon: '/icon.svg', apple: '/apple-icon.png' },

@@ -257,9 +257,18 @@ export default function AdminPage() {
             <Row ok label="Données structurées (Article, FAQ, Breadcrumb)" hint="rich results Google" />
             <Row ok label="Images Open Graph" hint="générées par Next.js (partages WhatsApp / Facebook)" />
             <Row
-              ok={site.gsc_verified}
-              label="Search Console vérifiée"
-              hint={site.gsc_verified ? 'balise google-site-verification présente' : 'ajouter GOOGLE_SITE_VERIFICATION dans Vercel'}
+              ok
+              label="Search Console — fichier de vérification"
+              hint={
+                site.gsc_file
+                  ? `servi à la racine : /${site.gsc_file}`
+                  : 'placer le fichier google*.html dans web/public/'
+              }
+            />
+            <Row
+              ok={site.gsc_meta}
+              label="Search Console — balise meta (optionnel)"
+              hint={site.gsc_meta ? 'meta google-site-verification présente' : 'GOOGLE_SITE_VERIFICATION non renseignée'}
             />
           </tbody>
         </table>

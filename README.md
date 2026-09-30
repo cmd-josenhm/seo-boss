@@ -117,11 +117,27 @@ Le front fusionne **base + `web/lib/seed.js`** : si l'agent est en veille, le si
    `AGENT_BASE_URL`, `AGENT_TOKEN`, `ADMIN_TOKEN`, `CRON_SECRET`.
 4. Deploy 🎉
 
-### 3. Après déploiement (SEO)
+### 3. Après déploiement (SEO & indexation Google)
 
-- Vérifier le domaine dans **Google Search Console** et soumettre `sitemap.xml`.
-- IndexNow couvre **Bing, Yandex, Naver, Seznam** — **pas Google** (qui utilise le sitemap
-  et Search Console). Ne pas attendre d'indexation Google par IndexNow.
+**Vérification Search Console — déjà câblée dans le dépôt :**
+
+- Fichier de vérification servi à la racine :
+  `web/public/googleca9a26427c93ab29.html` → `https://buzzafrique.vercel.app/googleca9a26427c93ab29.html`
+- Méthode « balise HTML » optionnelle : renseigner `GOOGLE_SITE_VERIFICATION` dans Vercel.
+
+**À faire une fois dans la console :**
+
+1. Search Console → propriété `https://buzzafrique.vercel.app/` → **Vérifier**.
+2. **Sitemaps** → ajouter `sitemap.xml`.
+3. **Inspection de l'URL** → demander l'indexation des pages clés.
+
+**Ce que le site autorise déjà :** `robots.txt` ouvre explicitement tous les robots Google
+(recherche, images, actualités, vidéo, inspection, IA) ; les balises `googlebot` autorisent
+`max-snippet:-1`, `max-image-preview:large`, `max-video-preview:-1` ; le dashboard `/admin`
+et les routes `/api/` portent un `noindex` (meta + en-tête `X-Robots-Tag`).
+
+> IndexNow couvre **Bing, Yandex, Naver, Seznam** — **pas Google**. Pour Google, les leviers
+> sont le sitemap, robots.txt, le maillage interne et Search Console.
 
 ---
 

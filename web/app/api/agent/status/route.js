@@ -10,7 +10,9 @@ export async function GET() {
     site: {
       ga_connected: Boolean(process.env.NEXT_PUBLIC_GA_ID),
       ga_id: process.env.NEXT_PUBLIC_GA_ID || '',
-      gsc_verified: Boolean(process.env.GOOGLE_SITE_VERIFICATION),
+      // Search Console : fichier HTML servi à la racine + balise meta optionnelle
+      gsc_file: process.env.GSC_VERIFICATION_FILE || 'googleca9a26427c93ab29.html',
+      gsc_meta: Boolean(process.env.GOOGLE_SITE_VERIFICATION),
       vercel_analytics: true,
       database: 'backend intégré (SQLite)',
       agent_configured: Boolean(AGENT_URL),
