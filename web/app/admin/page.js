@@ -193,6 +193,7 @@ export default function AdminPage() {
         <table className="list">
           <tbody>
             <Row ok={site.ga_connected} label="Google Analytics 4 connecté" hint="NEXT_PUBLIC_GA_ID (G-…)" />
+            <Row ok={site.vercel_analytics !== false} label="Vercel Analytics + Speed Insights" hint="natif, cookieless — dashboard Vercel → Insights" />
             <Row
               ok={Boolean(agent)}
               label="Base de données du backend"

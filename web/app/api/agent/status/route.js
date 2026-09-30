@@ -10,6 +10,7 @@ export async function GET() {
     site: {
       ga_connected: Boolean(process.env.NEXT_PUBLIC_GA_ID),
       ga_id: process.env.NEXT_PUBLIC_GA_ID || '',
+      vercel_analytics: true, // @vercel/analytics + speed-insights dans le layout
       database: 'backend-intégré (SQLite)', // plus de Supabase
       agent_configured: Boolean(AGENT_URL),
       site_url: process.env.NEXT_PUBLIC_SITE_URL || '',

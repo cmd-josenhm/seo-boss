@@ -63,7 +63,7 @@ Le frontend a un repli : si l'agent est en veille → **seed embarqué** (le sit
 ### 1. Render (agent IA + base de données, 24h/24)
 1. Render → **New → Blueprint** → sélectionner ce dépôt (le `render.yaml` est prêt)
 2. Variables à remplir :
-   - `SITE_URL` → l'URL Vercel du site (ex. `https://buzzafrique.vercel.app`)
+   - `SITE_URL` = `https://buzzafrique.vercel.app` (déjà dans le render.yaml)
    - `GROQ_API_KEY` → gratuite sur [console.groq.com](https://console.groq.com) (Llama 3.3 70B open-source) — *optionnel mais recommandé*
    - `AGENT_TOKEN` → généré automatiquement
 3. L'agent démarre, **crée sa base SQLite**, mine les mots-clés et publie son premier article en < 1 min.
@@ -75,18 +75,25 @@ Le frontend a un repli : si l'agent est en veille → **seed embarqué** (le sit
 1. [vercel.com](https://vercel.com) → **Import Project** → ce dépôt
 2. **Root Directory = `web`** (Settings → General)
 3. Variables d'environnement (voir `web/.env.example`) :
-   - `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_GA_ID=G-R8TB7NDEYQ`, `GOOGLE_SITE_VERIFICATION`
+   - `NEXT_PUBLIC_SITE_URL=https://buzzafrique.vercel.app`, `NEXT_PUBLIC_GA_ID=G-R8TB7NDEYQ`, `GOOGLE_SITE_VERIFICATION`
    - `AGENT_BASE_URL` (URL Render), `AGENT_TOKEN`, `ADMIN_TOKEN`
 4. Deploy. Le site est en ligne 🎉
 
 ---
 
-## 📊 Google Analytics 4 (mesure des 1 000–5 000 visiteurs/jour)
+## 📊 Mesure d'audience (domaine : https://buzzafrique.vercel.app)
 
-- **ID configuré : `G-R8TB7NDEYQ`** (flux 15880562583) — dans `NEXT_PUBLIC_GA_ID`
-- Balise rendue côté serveur dans chaque page (gtag.js + config), vues SPA trackées
-- Bonus : beacon interne `/api/track` → table `page_views` du backend → compteur dans `/admin`
-  (source de vérité indépendante de GA)
+**3 sources complémentaires, zéro configuration :**
+
+1. **Vercel Analytics** (`@vercel/analytics`) — natif sur Vercel, cookieless/RGPD,
+   activé dès le déploiement (Dashboard Vercel → Insights)
+2. **Vercel Speed Insights** (`@vercel/speed-insights`) — Core Web Vitals en production
+3. **Google Analytics 4 — `G-R8TB7NDEYQ`** (flux 15880562583) — pour suivre l'objectif
+   1 000–5 000 visiteurs/jour en détail (pays, sources, pages) + compatibilité
+   Search Console ; balise rendue côté serveur dans chaque page
+
+Bonus : beacon interne `/api/track` → table `page_views` du backend → compteur dans `/admin`
+(source de vérité indépendante des deux outils ci-dessus)
 
 ---
 

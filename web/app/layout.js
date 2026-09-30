@@ -1,6 +1,8 @@
 import './globals.css';
 import Header, { Footer } from '@/components/Layout';
 import Analytics from '@/components/Analytics';
+import { Analytics as VercelAnalytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 import JsonLd, { siteJsonLd } from '@/components/JsonLd';
 import { SITE } from '@/lib/site';
 

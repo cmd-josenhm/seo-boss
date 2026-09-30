@@ -12,7 +12,7 @@ const env = (k, d = '') => (process.env[k] ?? d).toString().trim();
 export const config = {
   port: parseInt(env('PORT', '4000'), 10),
   agentToken: env('AGENT_TOKEN', 'dev-agent-token'),
-  siteUrl: env('SITE_URL', 'http://localhost:3000'),
+  siteUrl: env('SITE_URL', 'https://buzzafrique.vercel.app'),
   runIntervalMinutes: Math.max(1, parseInt(env('RUN_INTERVAL_MINUTES', '30'), 10)),
   autoPublish: env('AUTO_PUBLISH', 'true').toLowerCase() !== 'false',
   lang: env('AGENT_LANG', 'fr'),

@@ -15,7 +15,7 @@ services:
       - key: AGENT_TOKEN
         generateValue: true
       - key: SITE_URL
-        value: https://buzzafrique.example
+        value: https://buzzafrique.vercel.app
       # Base de données SQLite intégrée (aucun service externe).
       # Sur un plan payant Render, attacher un Disk et définir :
       # - key: DB_PATH
