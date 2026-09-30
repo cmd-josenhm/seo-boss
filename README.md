@@ -79,6 +79,7 @@ Le site est **toujours en ligne**, même sans base ni agent (mode démo).
 
 1. Créer une propriété **GA4** sur [analytics.google.com](https://analytics.google.com) (gratuit)
 2. Copier l'ID de mesure `G-XXXXXXX` → variable `NEXT_PUBLIC_GA_ID` sur Vercel → redéployer
+   - **ID déjà configuré pour ce projet : `G-R8TB7NDEYQ`** (flux ID 15880562583)
 3. La balise est injectée automatiquement (gtag.js + suivi SPA par page)
 4. Bonus : le site envoie aussi un beacon interne `/api/track` → compteur visible dans `/admin`
    (source de vérité indépendante de GA).
