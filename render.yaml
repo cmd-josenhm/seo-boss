@@ -1,0 +1,32 @@
+# Render — service backend de l'agent IA (24h/24)
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: seo-boss-agent
+    runtime: node
+    rootDir: agent
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: AGENT_TOKEN
+        generateValue: true
+      - key: SITE_URL
+        value: https://buzzafrique.example
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OLLAMA_URL
+        sync: false
+      - key: RUN_INTERVAL_MINUTES
+        value: "30"
+      - key: AUTO_PUBLISH
+        value: "true"
