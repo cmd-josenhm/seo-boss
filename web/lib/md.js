@@ -1,6 +1,8 @@
 /**
  * Mini moteur Markdown -> HTML (titres, listes, gras, liens, tableaux simples).
  * Suffisant pour le contenu généré par l'agent, sans dépendance externe.
+ * Les titres reçoivent un `id` : le sommaire (« Dans ce guide ») pointe donc
+ * vers de vraies ancres.
  */
 
 const esc = (s) =>
@@ -13,14 +15,25 @@ const inline = (s) =>
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, text, href) => {
       const internal = href.startsWith('/');
-      return `<a href="${href}"${internal ? '' : ' rel="noopener nofollow" target="_blank"'}>${text}</a>`;
+      return `<a href="${href}"${internal ? '' : ' rel="noopener nofollow" target="_blank"'} >${text}</a>`;
     });
+
+/** Identifiant d'ancre, identique à celui utilisé par le sommaire. */
+export function slugifyHeading(s) {
+  return String(s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
 
 export function mdToHtml(md) {
   const lines = String(md || '').split('\n');
   const out = [];
   let list = null; // 'ul' | 'ol'
   let para = [];
+  let inTable = false;
 
   const flushPara = () => {
     if (para.length) {
@@ -34,6 +47,12 @@ export function mdToHtml(md) {
       list = null;
     }
   };
+  const closeTable = () => {
+    if (inTable) {
+      out.push('</tbody></table>');
+      inTable = false;
+    }
+  };
 
   for (const raw of lines) {
     const line = raw.trimEnd();
@@ -41,6 +60,7 @@ export function mdToHtml(md) {
     if (!line.trim()) {
       flushPara();
       closeList();
+      closeTable();
       continue;
     }
 
@@ -48,15 +68,35 @@ export function mdToHtml(md) {
     if (h) {
       flushPara();
       closeList();
+      closeTable();
       const lvl = h[1].length;
-      out.push(`<h${lvl}>${inline(h[2])}</h${lvl}>`);
+      out.push(`<h${lvl} id="${slugifyHeading(h[2])}">${inline(h[2])}</h${lvl}>`);
       continue;
     }
+
+    if (/^\|.*\|$/.test(line.trim())) {
+      flushPara();
+      closeList();
+      if (/^\|[\s:|-]+\|$/.test(line.trim())) continue; // ligne de séparation
+      const cells = line.trim().slice(1, -1).split('|').map((c) => c.trim());
+      if (!inTable) {
+        inTable = true;
+        out.push(`<table><thead><tr>${cells.map((c) => `<th>${inline(c)}</th>`).join('')}</tr></thead><tbody>`);
+      } else {
+        out.push(`<tr>${cells.map((c) => `<td>${inline(c)}</td>`).join('')}</tr>`);
+      }
+      continue;
+    }
+    closeTable();
 
     const ul = line.match(/^[-*]\s+(.*)$/);
     if (ul) {
       flushPara();
-      if (list !== 'ul') { closeList(); out.push('<ul>'); list = 'ul'; }
+      if (list !== 'ul') {
+        closeList();
+        out.push('<ul>');
+        list = 'ul';
+      }
       out.push(`<li>${inline(ul[1])}</li>`);
       continue;
     }
@@ -64,40 +104,21 @@ export function mdToHtml(md) {
     const ol = line.match(/^\d+[.)]\s+(.*)$/);
     if (ol) {
       flushPara();
-      if (list !== 'ol') { closeList(); out.push('<ol>'); list = 'ol'; }
+      if (list !== 'ol') {
+        closeList();
+        out.push('<ol>');
+        list = 'ol';
+      }
       out.push(`<li>${inline(ol[1])}</li>`);
       continue;
     }
 
-    if (/^\|.*\|$/.test(line.trim())) {
-      flushPara();
-      closeList();
-      // tableau markdown simple (ignorer la ligne de séparation)
-      if (/^\|[\s:|-]+\|$/.test(line.trim())) continue;
-      const cells = line.trim().slice(1, -1).split('|').map((c) => c.trim());
-      const tag = out._head ? 'td' : 'td';
-      if (!out._inTable) {
-        out.push('<table>');
-        out._inTable = true;
-        out._head = true;
-        out.push(`<thead><tr>${cells.map((c) => `<th>${inline(c)}</th>`).join('')}</tr></thead>`);
-        out.push('<tbody>');
-        out._head = false;
-      } else {
-        out.push(`<tr>${cells.map((c) => `<${tag}>${inline(c)}</${tag}>`).join('')}</tr>`);
-      }
-      continue;
-    }
-    if (out._inTable) {
-      out.push('</tbody></table>');
-      out._inTable = false;
-    }
-
+    closeList();
     para.push(line.trim());
   }
   flushPara();
   closeList();
-  if (out._inTable) out.push('</tbody></table>');
+  closeTable();
   return out.join('\n');
 }
 

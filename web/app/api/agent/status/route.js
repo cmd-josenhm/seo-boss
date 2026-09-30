@@ -10,8 +10,11 @@ export async function GET() {
     site: {
       ga_connected: Boolean(process.env.NEXT_PUBLIC_GA_ID),
       ga_id: process.env.NEXT_PUBLIC_GA_ID || '',
-      vercel_analytics: true, // @vercel/analytics + speed-insights dans le layout
-      database: 'backend-intégré (SQLite)', // plus de Supabase
+      // Search Console : fichier HTML servi à la racine + balise meta optionnelle
+      gsc_file: process.env.GSC_VERIFICATION_FILE || 'googleca9a26427c93ab29.html',
+      gsc_meta: Boolean(process.env.GOOGLE_SITE_VERIFICATION),
+      vercel_analytics: true,
+      database: 'backend intégré (SQLite)',
       agent_configured: Boolean(AGENT_URL),
       site_url: process.env.NEXT_PUBLIC_SITE_URL || '',
     },
@@ -20,18 +23,19 @@ export async function GET() {
   };
 
   if (!AGENT_URL) {
-    out.error = 'AGENT_BASE_URL non configuré — le site utilise le contenu seed/local.';
+    out.error = 'AGENT_BASE_URL non configuré — le site sert uniquement le catalogue sauvegardé.';
     return NextResponse.json(out);
   }
 
   try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 8000);
-    const res = await fetch(`${AGENT_URL}/status`, { signal: ctrl.signal, cache: 'no-store' });
-    clearTimeout(t);
+    const res = await fetch(`${AGENT_URL}/status`, {
+      signal: AbortSignal.timeout(8000),
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     out.agent = await res.json();
-  } catch {
-    out.error = 'Agent injoignable (le service Render est peut-être en veille).';
+  } catch (e) {
+    out.error = `Agent injoignable (${e.message}) — service Render en veille ou base en cours de démarrage.`;
   }
   return NextResponse.json(out);
 }

@@ -1,22 +1,34 @@
 /**
- * Moteeur de mots-clés ciblant l'Afrique francophone (+ Afrique anglophone).
- * Objectif : 1000-5000 visiteurs/jour -> long-trail local, intentions fortes
- * (comment faire, meilleurs, prix, télécharger, gratuit...).
+ * Moteur de mots-clés ciblant l'Afrique francophone (+ Afrique anglophone).
+ * Objectif : long-traîne locale, intentions fortes (comment faire, meilleurs,
+ * prix, télécharger, gratuit...) sur les 5 piliers éditoriaux du site.
  */
 
 export const CATEGORIES = {
-  fintech: {
-    label: 'Mobile Money & Fintech',
+  religion: {
+    label: 'Religion & Spiritualité',
     seeds: [
-      'Orange Money',
-      'MTN MoMo',
-      'Wave',
-      'M-Pesa',
-      'Airtel Money',
-      'Moov Money',
-      'carte bancaire virtuelle Afrique',
-      'compte bancaire en ligne Cameroun',
-      'envoyer de l\'argent de l\'Europe au Sénégal',
+      'prière',
+      'lecture de la Bible',
+      'Coran',
+      'jeûne',
+      'louange',
+      'étude biblique',
+      'groupe de prière',
+      'méditation',
+      'application de lecture spirituelle',
+      'dons et offrandes en ligne',
+    ],
+    // Intentions adaptées : on reste sur des recherches informationnelles/pratiques.
+    intents: [
+      { f: (k, m) => `comment prier ${m} : guide pratique`, p: 9 },
+      { f: (k, m) => `meilleures applications gratuites pour ${lower(k)} ${m}`, p: 9 },
+      { f: (k, m) => `${lower(k)} : guide complet pour débutants ${m}`, p: 8 },
+      { f: (k, m) => `comment organiser ${lower(k)} ${m}`, p: 8 },
+      { f: (k, m) => `${lower(k)} en ligne : comment faire ${m}`, p: 7 },
+      { f: (k, m) => `pourquoi ${lower(k)} est important ${m}`, p: 6 },
+      { f: (k, m) => `${lower(k)} : erreurs à éviter ${m}`, p: 6 },
+      { f: (k, m) => `où trouver une communauté pour ${lower(k)} ${m}`, p: 6 },
     ],
   },
   ia: {
@@ -130,10 +142,11 @@ export function mineKeywords({ excludeSlugs = [], limit = 40 } = {}) {
   let gi = 0;
 
   for (const [cat, def] of Object.entries(CATEGORIES)) {
+    const intents = def.intents || INTENTS;
     const list = [];
     let i = 0;
     for (const seed of def.seeds) {
-      for (const intent of INTENTS) {
+      for (const intent of intents) {
         const market = MARKETS[(gi + i + base) % MARKETS.length];
         const keyword = intent.f(seed, market);
         const slug = slugify(keyword);
@@ -148,7 +161,7 @@ export function mineKeywords({ excludeSlugs = [], limit = 40 } = {}) {
     gi += 7;
   }
 
-  // round-robin : 1 idée fintech, 1 ia, 1 emploi, 1 business, 1 reseaux, ...
+  // round-robin : 1 religion, 1 ia, 1 emploi, 1 business, 1 reseaux, ...
   const out = [];
   let col = 0;
   while (out.length < limit) {

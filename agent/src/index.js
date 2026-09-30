@@ -1,26 +1,80 @@
 /**
  * SEO BOSS — Agent IA de contenu & SEO (24h/24)
  * Déployé sur Render. API de contrôle + scheduler autonome.
+ *
+ * Sécurité : toute route de contrôle exige le jeton `AGENT_TOKEN`
+ * (en-tête `Authorization: Bearer …` ou `x-agent-token`).
  */
 import express from 'express';
 import cors from 'cors';
+import crypto from 'node:crypto';
 import { config } from './config.js';
 import { store } from './store.js';
-import { runCycle, isRunning, resetTasks } from './agent.js';
+import { runCycle, isRunning, resetTasks, catalogSize } from './agent.js';
 import { activeProviderName } from './providers.js';
 import { mineKeywords, CATEGORIES } from './tools/keywords.js';
+import { buildSeedFile } from './export-seed.js';
 
 const app = express();
-app.use(cors());
+app.disable('x-powered-by');
+
+// CORS : uniquement le site officiel (+ localhost en développement).
+const allowedOrigins = [config.siteUrl.replace(/\/$/, '')];
+app.use(
+  cors({
+    origin(origin, cb) {
+      if (!origin) return cb(null, true); // appels serveur à serveur
+      if (allowedOrigins.includes(origin) || /^http:\/\/localhost(:\d+)?$/.test(origin)) {
+        return cb(null, true);
+      }
+      return cb(new Error('origine non autorisée'));
+    },
+  })
+);
 app.use(express.json({ limit: '1mb' }));
 
 const startedAt = Date.now();
 
-// --- auth du tableau de bord ---
+/** Comparaison de jetons en temps constant (évite les attaques temporelles). */
+function tokenOk(provided) {
+  if (!provided) return false;
+  const a = Buffer.from(String(provided));
+  const b = Buffer.from(String(config.agentToken));
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
+function readToken(req) {
+  return (
+    req.headers.authorization?.replace(/^Bearer\s+/i, '') ||
+    req.headers['x-agent-token'] ||
+    req.query.token
+  );
+}
+
+/** Auth du tableau de bord / des robots de maintenance. */
 function auth(req, res, next) {
-  const token = req.headers.authorization?.replace(/^Bearer\s+/i, '') || req.headers['x-agent-token'];
-  if (token && token === config.agentToken) return next();
-  res.status(401).json({ error: 'token invalide (x-agent-token)' });
+  if (tokenOk(readToken(req))) return next();
+  res.status(401).json({ error: 'jeton invalide (x-agent-token)' });
+}
+
+/** Limitation de débit en mémoire (par IP) — protège les routes publiques d'écriture. */
+const hits = new Map();
+function rateLimit(max, windowMs) {
+  return (req, res, next) => {
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown';
+    const now = Date.now();
+    const entry = hits.get(ip) || { count: 0, reset: now + windowMs };
+    if (now > entry.reset) {
+      entry.count = 0;
+      entry.reset = now + windowMs;
+    }
+    entry.count++;
+    hits.set(ip, entry);
+    if (hits.size > 5000) hits.clear();
+    if (entry.count > max) return res.status(429).json({ error: 'trop de requêtes' });
+    next();
+  };
 }
 
 app.get('/health', (_req, res) => res.json({ ok: true, uptime: Date.now() - startedAt }));
@@ -28,10 +82,11 @@ app.get('/health', (_req, res) => res.json({ ok: true, uptime: Date.now() - star
 // Statut global pour /admin
 app.get('/status', async (_req, res) => {
   try {
-    const [runs, stats, views] = await Promise.all([
+    const [runs, stats, views, catalog] = await Promise.all([
       store.listRuns(15),
       store.stats(),
       store.getViews({ days: 7 }),
+      catalogSize(),
     ]);
     res.json({
       ok: true,
@@ -50,14 +105,15 @@ app.get('/status', async (_req, res) => {
         failed_tasks: stats.tasks_failed,
         db_size_kb: stats.db_size_kb,
       },
-      traffic: views,
-      rotation: {
-        enabled: config.rotation.enabled,
-        content_max: config.rotation.contentMax, // 0 = purge complète à chaque cycle
-        retention_hours: config.rotation.retentionHours,
-        cycle_minutes: config.runIntervalMinutes,
-        retired_total: stats.retired,
+      // Modèle « bibliothèque » : le catalogue ne fait que croître.
+      catalog: {
+        model: 'growth-only',
+        total: catalog.total,
+        published: catalog.published,
+        max: config.catalog.max, // 0 = illimité
+        deleted_total: stats.retired,
       },
+      traffic: views,
       indexnow: {
         enabled: config.indexnow.enabled,
         key_location: `${config.siteUrl.replace(/\/$/, '')}/indexnow.key.txt`,
@@ -70,14 +126,14 @@ app.get('/status', async (_req, res) => {
   }
 });
 
-// Déclencher un cycle immédiatement (bouton "Générer" du dashboard)
+// Déclencher un cycle immédiatement (bouton "Générer" du dashboard, cron externe)
 app.post('/run', auth, async (req, res) => {
   const result = await runCycle({ mode: req.body?.mode || 'full' });
   res.json(result);
 });
 
-// Déclencher un cycle maintenant (interne)
-app.post('/internal/run', async (req, res) => {
+// Déclencher un cycle maintenant (interne, protégé par le même jeton)
+app.post('/internal/run', auth, async (req, res) => {
   const result = await runCycle({ mode: req.body?.mode || 'full' });
   res.json(result);
 });
@@ -123,18 +179,25 @@ app.post('/tasks', auth, async (req, res) => {
 
 // Aperçu du mining de mots-clés (stratégie SEO visible dans /admin)
 app.get('/keywords/preview', auth, async (_req, res) => {
-  const existing = await store.listArticles({ limit: 500 });
+  const existing = await store.listArticles({ limit: 5000 });
   res.json(mineKeywords({ excludeSlugs: existing.map((a) => a.slug), limit: 25 }));
 });
 
+// Sauvegarde du catalogue : renvoie un fichier seed prêt à committer
+// (filet de sécurité gratuit si la base du conteneur est réinitialisée)
+app.get('/export/seed.js', async (_req, res) => {
+  const articles = await store.listArticles({ status: 'published', limit: 5000 });
+  res.type('text/javascript').send(buildSeedFile(articles));
+});
+
 // Maintenance
-app.post('/internal/reset-tasks', async (_req, res) => {
+app.post('/internal/reset-tasks', auth, async (_req, res) => {
   res.json({ cleared: await resetTasks() });
 });
 
 // ---------------- Vues (compteur interne de fréquentation) ----------------
-// Beacon public envoyé par le frontend (best-effort)
-app.post('/views', async (req, res) => {
+// Beacon public envoyé par le frontend (best-effort, protégé par limite de débit)
+app.post('/views', rateLimit(config.rateLimit.maxViews, config.rateLimit.windowMs), async (req, res) => {
   try {
     await store.addView(req.body?.path || '/');
   } catch (e) {
@@ -153,7 +216,10 @@ app.get('/views', auth, async (req, res) => {
   }
 });
 
-// ---------------- Scheduler 24h/24 ----------------
+// ---------------- Scheduler ----------------
+// NB : sur un hébergeur qui endort le service (Render free), ce timer ne suffit pas.
+// Un déclencheur externe (cron Render, cron-job.org, Vercel Cron -> /api/cron/run)
+// appelle POST /run : c'est lui qui garantit la cadence 24h/24.
 async function tick() {
   if (isRunning()) return;
   try {
@@ -174,9 +240,9 @@ async function main() {
   });
   app.listen(config.port, '0.0.0.0', () => {
     console.log(`\n🤖 SEO BOSS agent — port ${config.port}`);
-    console.log(`   stockage : ${store.mode()}`);
+    console.log(`   stockage : ${store.mode()} (${store.info().path})`);
     console.log(`   cycle    : toutes les ${config.runIntervalMinutes} min`);
-    console.log(`   auto-pub : ${config.autoPublish}`);
+    console.log(`   catalogue: croissance uniquement (max ${config.catalog.max || 'illimité'})`);
     console.log(`   site     : ${config.siteUrl}\n`);
   });
   // premier cycle après 20 s (laisse le serveur démarrer), puis boucle

@@ -1,6 +1,12 @@
 /**
  * Pipeline de l'agent : mine les mots-clés -> rédige -> optimise -> publie -> liens internes.
- * Un cycle = une exécution complète, déclenchée par le scheduler ou l'API /run.
+ * Un cycle = une exécution complète, déclenchée par le scheduler, l'API /run ou un cron externe.
+ *
+ * MODÈLE DE CATALOGUE (important) : « bibliothèque ».
+ *   - les articles publiés sont CONSERVÉS indéfiniment : aucune suppression,
+ *     aucune purge, aucun slug retiré de l'index ;
+ *   - chaque cycle AJOUTE de nouveaux articles (ou met à jour les anciens) ;
+ *   - le catalogue ne fait donc que croître — c'est ce qui construit un actif SEO.
  */
 import { store } from './store.js';
 import { config } from './config.js';
@@ -10,49 +16,14 @@ import { seoScore, addInternalLinks, refreshWithLLM } from './tools/seo.js';
 import { activeProviderName } from './providers.js';
 import { submitUrls } from './tools/indexnow.js';
 
-/**
- * ROTATION AUTO des contenus (chaque cycle) :
- *  - mode purge (CONTENT_MAX=0) : tous les contenus sont supprimés,
- *    l'agent en recrée ensuite de nouveaux sur les recherches du moment.
- *  - mode inventaire (CONTENT_MAX>0) : on garde les N contenus les plus
- *    récents, les plus anciens (au-delà de la rétention) sont supprimés.
- * Dans les deux cas, les slugs supprimés sont mémorisés pour ne jamais
- * être recréés -> le catalogue tourne en permanence vers de nouveaux sujets.
- */
-async function rotate({ purge = false, say = () => {} }) {
-  const { contentMax, retentionHours, enabled } = config.rotation;
-  if (!enabled) return 0;
-
-  const all = await store.listArticles({ limit: 5000 });
-  let victims = [];
-
-  if (purge || contentMax === 0) {
-    // purge complète : tous les contenus existants
-    victims = all;
-  } else {
-    const over = all.length - contentMax;
-    if (over <= 0) return 0;
-    const cutoff = Date.now() - retentionHours * 3600 * 1000;
-    victims = all
-      .slice()
-      .sort((a, b) => Date.parse(a.created_at || 0) - Date.parse(b.created_at || 0))
-      .filter((a) => Date.parse(a.created_at || 0) < cutoff)
-      .slice(0, over);
-  }
-
-  for (const a of victims) {
-    await store.retireArticle(a.slug);
-    say(`rotation: contenu supprimé -> /blog/${a.slug}`);
-  }
-  if (victims.length) {
-    const rest = (await store.listArticles({ limit: 5000 })).length;
-    say(`rotation: ${victims.length} ancien(s) contenu(s) supprimé(s) — inventaire: ${rest}`);
-  }
-  return victims.length;
-}
-
 let running = false;
 export const isRunning = () => running;
+
+/** Nombre d'articles publiés actuellement (catalogue). */
+export async function catalogSize() {
+  const all = await store.listArticles({ limit: 5000 });
+  return { total: all.length, published: all.filter((a) => a.status === 'published').length };
+}
 
 export async function runCycle({ mode = 'full' } = {}) {
   if (running) return { skipped: true, reason: 'un_cycle_est_déjà_en_cours' };
@@ -65,34 +36,43 @@ export async function runCycle({ mode = 'full' } = {}) {
   let provider = 'template';
   const createdSlugs = [];
 
-  try {
-    const say = (m) => {
-      const line = `[${new Date().toISOString()}] ${m}`;
-      log.push(line);
-      console.log('[agent]', line);
-    };
+  const say = (m) => {
+    const line = `[${new Date().toISOString()}] ${m}`;
+    log.push(line);
+    console.log('[agent]', line);
+  };
 
-    // 0) ROTATION (purge) : si mode purge, on vide le catalogue AVANT de réécrire
-    let purged = 0;
-    if (mode === 'full' && config.rotation.contentMax === 0) {
-      purged = await rotate({ purge: true, say });
-    }
+  try {
+    // 0) État du catalogue (jamais de suppression, on mesure seulement la croissance)
+    const before = await catalogSize();
+    say(`catalogue: ${before.total} article(s) au total (${before.published} publié(s)) — croissance uniquement`);
+
+    const capped = config.catalog.max > 0 && before.total >= config.catalog.max;
 
     // 1) File de tâches vide ? -> on mine de nouveaux mots-clés longue traîne
-    let pending = await store.listTasks({ status: 'pending', limit: 20 });
-    if (pending.length < 3) {
+    let pending = await store.listTasks({ status: 'pending', limit: 50 });
+    if (!capped && pending.length < 5) {
       const existing = await store.listArticles({ limit: 5000 });
-      const retired = await store.listRetiredSlugs();
+      const retired = await store.listRetiredSlugs(); // historique (modèle précédent)
       const excludeSlugs = [...existing.map((a) => a.slug), ...retired];
-      const ideas = mineKeywords({ excludeSlugs, limit: 15 });
+      const ideas = mineKeywords({ excludeSlugs, limit: 25 });
       const fresh = await store.addTasks(
-        ideas.map((i) => ({ type: 'write', keyword: i.keyword, slug: i.slug, category: i.category, priority: i.priority, payload: { slug: i.slug } }))
+        ideas.map((i) => ({
+          type: 'write',
+          keyword: i.keyword,
+          slug: i.slug,
+          category: i.category,
+          priority: i.priority,
+          payload: { slug: i.slug },
+        }))
       );
       say(`mining: ${fresh.length} nouveaux mots-clés en file`);
-      pending = await store.listTasks({ status: 'pending', limit: 20 });
+      pending = await store.listTasks({ status: 'pending', limit: 50 });
+    } else if (capped) {
+      say(`catalogue: plafond ${config.catalog.max} atteint — création suspendue, mises à jour continues`);
     }
 
-    // 2) Rédaction : jusqu'à MAX_PER_CYCLE articles par cycle
+    // 2) Rédaction : jusqu'à MAX_ARTICLES_PER_CYCLE nouveaux articles par cycle
     const maxPerCycle = config.maxArticlesPerCycle;
     let processed = 0;
     for (const task of pending) {
@@ -104,6 +84,7 @@ export async function runCycle({ mode = 'full' } = {}) {
         const taskSlug = task.payload?.slug || slugify(task.keyword);
         const exists = await store.getArticle(taskSlug);
         if (exists) {
+          // le sujet existe déjà : on ne le réécrit pas, on libère la tâche
           await store.updateTask(task.id, { status: 'done', error: '' });
           tasksDone++;
           continue;
@@ -116,7 +97,7 @@ export async function runCycle({ mode = 'full' } = {}) {
         provider = draft._provider || provider;
         const links = addInternalLinks(
           { ...draft, status: 'published' },
-          await store.listArticles({ status: 'published', limit: 30 })
+          await store.listArticles({ status: 'published', limit: 40 })
         );
         const final = { ...draft, ...links.article };
         final.seo_score = seoScore(final);
@@ -135,9 +116,9 @@ export async function runCycle({ mode = 'full' } = {}) {
       }
     }
 
-    // 3) Rafraîchissement SEO d'un ancien article (désindexation / fraîcheur)
+    // 3) Rafraîchissement SEO d'un ancien article (fraîcheur : mise à jour, pas suppression)
     if (mode === 'full') {
-      const published = await store.listArticles({ status: 'published', limit: 100 });
+      const published = await store.listArticles({ status: 'published', limit: 200 });
       if (published.length) {
         const target = published
           .slice()
@@ -177,19 +158,17 @@ export async function runCycle({ mode = 'full' } = {}) {
           updated++;
         }
       }
-
-      // 5) ROTATION (mode inventaire) : purge des contenus au-delà de CONTENT_MAX
-      if (config.rotation.contentMax > 0) {
-        purged += await rotate({ say });
-      }
-
-      // 6) IndexNow : indexation automatique des nouveaux contenus (Google/Bing)
-      if (createdSlugs.length) {
-        const urls = createdSlugs.map((sl) => `${config.siteUrl.replace(/\/$/, '')}/blog/${sl}`);
-        const inow = await submitUrls(urls);
-        say(`indexnow: ${inow.submitted}/${urls.length} URL soumise(s)${inow.status ? ` (HTTP ${inow.status})` : ''}${inow.error ? ` — ${inow.error}` : ''}`);
-      }
     }
+
+    // 5) IndexNow : notification d'indexation des nouvelles URLs (Bing/Yandex/Naver/Seznam)
+    if (createdSlugs.length) {
+      const urls = createdSlugs.map((sl) => `${config.siteUrl.replace(/\/$/, '')}/blog/${sl}`);
+      const inow = await submitUrls(urls);
+      say(`indexnow: ${inow.submitted}/${urls.length} URL soumise(s)${inow.status ? ` (HTTP ${inow.status})` : ''}${inow.error ? ` — ${inow.error}` : ''}`);
+    }
+
+    const after = await catalogSize();
+    say(`catalogue après cycle: ${after.total} article(s) — aucune suppression`);
 
     await store.recordRun({
       started_at: startedAt,
@@ -202,7 +181,7 @@ export async function runCycle({ mode = 'full' } = {}) {
       log: log.slice(-30),
     });
 
-    return { ok: true, created, updated, tasksDone, provider, purged, slugs: createdSlugs, log };
+    return { ok: true, created, updated, tasksDone, provider, catalog: after, slugs: createdSlugs, log };
   } catch (e) {
     say(`cycle en erreur: ${e.message}`);
     await store.recordRun({

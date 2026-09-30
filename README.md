@@ -1,8 +1,35 @@
-# 🤖 SEO BuzzBoss — Architecture & Guide
+# 🤖 BuzzBoss — BuzzAfrique : site + agent IA de contenu
 
-**Objectif :** un site web africain francophone (**BuzzAfrique**) qui attire **1 000 à 5 000 visiteurs/jour** via le SEO, avec un **agent IA open-source qui tourne 24h/24** pour produire et optimiser le contenu en permanence, plus un **tableau de bord de contrôle** du site.
+**Objectif :** un média africain francophone (**BuzzAfrique**) qui attire **1 000 à 5 000 visiteurs/jour** via le SEO, avec un **agent IA open-source** qui produit et optimise le contenu en continu, plus un **tableau de bord de contrôle**.
 
-> **Zéro service externe de base de données** : la base (SQLite) est **intégrée au backend de l'agent**. Seuls 2 déploiements : Vercel (site) + Render (agent).
+> **2 déploiements seulement** : Vercel (site Next.js) + Render (agent IA + base SQLite intégrée).
+
+---
+
+## 📚 Modèle de catalogue : « bibliothèque » (croissance uniquement)
+
+**Un article publié n'est jamais supprimé.** Chaque cycle de l'agent **ajoute** de nouveaux
+guides ou **met à jour** les anciens. Aucun slug indexé ne disparaît, aucune URL ne passe
+en 404 : c'est la condition pour construire une autorité SEO durable.
+
+```
+Cycle (toutes les 30 min) :
+  1. mining de nouveaux mots-clés     → file de tâches
+  2. rédaction de N nouveaux articles → s'AJOUTENT au catalogue
+  3. rafraîchissement d'un ancien article (fraîcheur)
+  4. re-score SEO de tout le catalogue
+  5. IndexNow (Bing / Yandex / Naver / Seznam)
+```
+
+**Filet de sécurité :** le site fusionne en permanence deux sources — la base de l'agent
+**et** le catalogue versionné dans le dépôt (`web/lib/seed.js`). Si l'hébergeur réinitialise
+la base, le site reste complet et les articles connus restent accessibles.
+
+```bash
+cd agent && npm run export-seed   # sauvegarde la base vers web/lib/seed.js (cumulatif)
+```
+
+> Le bouton **« 💾 Sauvegarder le catalogue »** du dashboard `/admin` télécharge ce même fichier.
 
 ---
 
@@ -12,177 +39,166 @@
 seo-boss/
 ├── web/                  → Frontend Next.js 14 (App Router) ………… déployé sur VERCEL
 │   ├── app/              → pages SEO (accueil, blog, catégories, sitemap, RSS, 404)
-│   │   └── admin/        → 🎛️ tableau de bord de contrôle du site + de l'agent
-│   │   └── api/          → proxy agent, tracking vues, articles
-│   ├── components/       → UI (header, cartes, JSON-LD, Google Analytics 4)
+│   │   ├── admin/        → 🎛️ tableau de bord de contrôle (agent + catalogue + SEO)
+│   │   ├── opengraph-image.js / blog/[slug]/opengraph-image.js → images de partage social
+│   │   └── api/          → proxy agent, tracking vues, articles, déclencheur cron
+│   ├── components/       → Header (navbar responsive), Footer, cartes, JSON-LD, GA4
 │   └── lib/              → accès agent → seed embarqué (repli hors-ligne)
 │
-└── agent/                → Agent IA open-source 24h/24 …………… déployé sur RENDER
-    ├── src/store.js      → 💾 BASE DE DONNÉES SQLite intégrée (better-sqlite3)
-    ├── src/index.js      → API Express + scheduler (cycle toutes les N minutes)
+└── agent/                → Agent IA open-source ………………………………… déployé sur RENDER
+    ├── src/store.js      → 💾 BASE SQLite intégrée (better-sqlite3)
+    ├── src/index.js      → API Express + scheduler
     ├── src/agent.js      → pipeline : mining → rédaction → SEO → publication
-    ├── src/providers.js  → LLM gratuits (Ollama, Groq, OpenRouter, HF) + moteur local
-    └── src/tools/        → keywords.js (SEO), writer.js (rédaction), seo.js (audit)
+    ├── src/tick.js       → déclencheur externe (cron) : garantit la cadence 24h/24
+    ├── src/export-seed.js→ sauvegarde du catalogue vers web/lib/seed.js
+    └── src/tools/        → keywords.js (SEO) · writer.js (rédaction) · seo.js (audit)
 ```
 
-### Base de données du backend (SQLite intégré)
+### Base de données (SQLite intégré)
 
 | Table | Rôle |
 |---|---|
-| `articles` | contenus publiés (markdown, meta, FAQ, score SEO) |
-| `agent_tasks` | file de tâches de l'agent (mining, rédaction, refresh) |
+| `articles` | contenus publiés (markdown, meta, FAQ, score SEO) — **conservés indéfiniment** |
+| `agent_tasks` | file de tâches (mining, rédaction, refresh) |
 | `agent_runs` | historique des cycles (dashboard) |
 | `page_views` | compteur de fréquentation (complément de GA4) |
-| `settings` | réglages (auto-publication, langue, cible quotidienne) |
+| `settings` | réglages |
 
-- Fichier : `agent/data/seo-boss.db` (variable `DB_PATH` pour le déplacer)
-- Mode **WAL**, écritures atomiques, requêtes préparées — dans le même processus que l'agent
-- Sauvegarde : copier le fichier ; sur Render, attacher un **Disk** (plan payant) + `DB_PATH=/var/data/seo-boss.db`
+- Fichier : `agent/data/seo-boss.db` — variable `DB_PATH` pour le déplacer
+- **Persistance** : sur Render, attacher un **Disk** (`mountPath: /var/data`) et définir
+  `DB_PATH=/var/data/seo-boss.db` (voir les blocs commentés dans `render.yaml`, plan payant).
 
 ### Flux de données
 
 ```
-Agent IA (Render, boucle 24/7)  ←→  💾 SQLite intégré au backend
+Agent IA (Render)                    💾 SQLite (persistant si Disk)
    │  1. mine les mots-clés longue traîne Afrique
-   │  2. rédige l'article (LLM open-source ou moteur template intégré)
+   │  2. rédige (LLM open-source ou moteur template par catégorie)
    │  3. score SEO, meta, FAQ, liens internes
-   │  4. publie en base
+   │  4. publie en base (jamais de suppression)
    ▼
-Frontend Vercel (SSR)  ──GET /articles──►  agent (/articles)  ──►  SQLite
-   ▲                                          ▲
-   └── /admin (dashboard) ── /status, /run ───┘
-   └── beacon /api/track ──► /views ─────────►  SQLite (page_views)
+Frontend Vercel (ISR 5 min)  ──GET /articles──►  agent  ──►  SQLite
+   ▲                                                ▲
+   └── /admin ── /status, /run ──────────────────────┘
+   └── beacon /api/track ──► /views ────────────────►  SQLite (page_views)
+   └── /api/cron/run ──► POST /run (déclencheur externe)
 ```
 
-Le frontend a un repli : si l'agent est en veille → **seed embarqué** (le site reste en ligne).
+Le front fusionne **base + `web/lib/seed.js`** : si l'agent est en veille, le site reste complet.
 
 ---
 
-## 🚀 Déploiement (10 minutes)
+## 🚀 Déploiement
 
-### 1. Render (agent IA + base de données, 24h/24)
-1. Render → **New → Blueprint** → sélectionner ce dépôt (le `render.yaml` est prêt)
-2. Variables à remplir :
-   - `SITE_URL` = `https://buzzafrique.vercel.app` (déjà dans le render.yaml)
-   - `GROQ_API_KEY` → **clé à coller** dans Render → Environment (gratuite sur
-     [console.groq.com](https://console.groq.com), modèle Llama 3.3 70B open-source).
-     Sans clé, l'agent bascule automatiquement sur son moteur de rédaction local.
-   - `AGENT_TOKEN` → généré automatiquement
-3. L'agent démarre, **crée sa base SQLite**, mine les mots-clés et publie son premier article en < 1 min.
+### 1. Render (agent IA)
 
-> **Zéro clé API ?** Aucun problème : l'agent embarque un moteur de rédaction local qui
-> produit des articles complets. Branchez Ollama/Groq plus tard pour la qualité maximale.
+1. Render → **New → Blueprint** → sélectionner ce dépôt (`render.yaml` prêt).
+2. Variables à remplir (Dashboard → Environment) :
+   - `SITE_URL` = `https://buzzafrique.vercel.app` (déjà dans le blueprint)
+   - `GROQ_API_KEY` → **clé gratuite** ([console.groq.com](https://console.groq.com)) pour des
+     articles rédigés par un LLM. Sans clé, l'agent utilise son moteur template (contenu correct
+     mais répétitif).
+   - `AGENT_TOKEN` est généré automatiquement.
+3. **Persistance (recommandé)** : décommenter `plan: starter` + `disk:` dans `render.yaml`
+   et passer `DB_PATH=/var/data/seo-boss.db`.
+4. **Cadence 24h/24** : les services gratuits s'endorment après 15 min d'inactivité.
+   Trois options :
+   - cron Render (bloc commenté dans `render.yaml`, facturation possible) ;
+   - **Vercel Cron** : `/api/cron/run` (déjà en place, quotidien sur l'offre Hobby) ;
+   - **ordonnanceur externe gratuit** (cron-job.org, UptimeRobot) qui appelle
+     `POST https://seo-boss-agent.onrender.com/run` avec l'en-tête `x-agent-token`.
 
 ### 2. Vercel (frontend)
+
 1. [vercel.com](https://vercel.com) → **Import Project** → ce dépôt
-2. **Root Directory = `web`** (Settings → General)
-3. Variables d'environnement (voir `web/.env.example`) :
-   - `NEXT_PUBLIC_SITE_URL=https://buzzafrique.vercel.app`, `NEXT_PUBLIC_GA_ID=G-R8TB7NDEYQ`, `GOOGLE_SITE_VERIFICATION`
-   - `AGENT_BASE_URL` (URL Render), `AGENT_TOKEN`, `ADMIN_TOKEN`
-4. Deploy. Le site est en ligne 🎉
+2. **Root Directory = `web`**
+3. Variables d'environnement (`web/.env.example`) :
+   `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_GA_ID`, `GOOGLE_SITE_VERIFICATION`,
+   `AGENT_BASE_URL`, `AGENT_TOKEN`, `ADMIN_TOKEN`, `CRON_SECRET`.
+4. Deploy 🎉
 
----
+### 3. Après déploiement (SEO & indexation Google)
 
-## 📊 Mesure d'audience (domaine : https://buzzafrique.vercel.app)
+**Vérification Search Console — déjà câblée dans le dépôt :**
 
-**3 sources complémentaires, zéro configuration :**
+- Fichier de vérification servi à la racine :
+  `web/public/googleca9a26427c93ab29.html` → `https://buzzafrique.vercel.app/googleca9a26427c93ab29.html`
+- Méthode « balise HTML » optionnelle : renseigner `GOOGLE_SITE_VERIFICATION` dans Vercel.
 
-1. **Vercel Analytics** (`@vercel/analytics`) — natif sur Vercel, cookieless/RGPD,
-   activé dès le déploiement (Dashboard Vercel → Insights)
-2. **Vercel Speed Insights** (`@vercel/speed-insights`) — Core Web Vitals en production
-3. **Google Analytics 4 — `G-R8TB7NDEYQ`** (flux 15880562583) — pour suivre l'objectif
-   1 000–5 000 visiteurs/jour en détail (pays, sources, pages) + compatibilité
-   Search Console ; balise rendue côté serveur dans chaque page
+**À faire une fois dans la console :**
 
-Bonus : beacon interne `/api/track` → table `page_views` du backend → compteur dans `/admin`
-(source de vérité indépendante des deux outils ci-dessus)
+1. Search Console → propriété `https://buzzafrique.vercel.app/` → **Vérifier**.
+2. **Sitemaps** → ajouter `sitemap.xml`.
+3. **Inspection de l'URL** → demander l'indexation des pages clés.
 
----
+**Ce que le site autorise déjà :** `robots.txt` ouvre explicitement tous les robots Google
+(recherche, images, actualités, vidéo, inspection, IA) ; les balises `googlebot` autorisent
+`max-snippet:-1`, `max-image-preview:large`, `max-video-preview:-1` ; le dashboard `/admin`
+et les routes `/api/` portent un `noindex` (meta + en-tête `X-Robots-Tag`).
 
-## 🔄 Boucle autonome 24h/24 (mode sans intervention)
-
-Chaque cycle (`RUN_INTERVAL_MINUTES=30` par défaut), l'agent exécute **tout seul** :
-
-1. **Rotation des contenus** — les anciens contenus sont **supprimés**, les nouveaux
-   prennent leur place :
-   - `CONTENT_MAX=40` (défaut) : inventaire de 40 contenus les plus récents,
-     les plus vieux sont supprimés au-delà de `RETENTION_HOURS=6` h de rétention
-   - `CONTENT_MAX=0` : **purge complète à chaque cycle** — tous les contenus sont
-     supprimés puis recréés sur les recherches du moment
-   - les slugs supprimés sont mémorisés : jamais recréés → le catalogue tourne
-     en permanence vers de **nouvelles questions**
-2. **Mining des recherches fréquentes** — mots-clés en forme de *question*
-   (« comment ça marche », « est-ce que c'est sûr », « quel est le meilleur »…)
-   croisés avec les pays/villes africaines → réponses aux questions People-Also-Ask
-3. **Rédaction** — `MAX_ARTICLES_PER_CYCLE=1` article complet (titre SEO, meta,
-   FAQ 5 Q/R, liens internes, score)
-4. **Rafraîchissement SEO** d'un ancien contenu + re-score de tout le catalogue
-5. **Publication automatique** en base + **IndexNow** → Google/Bing indexent les
-   nouvelles URLs en quelques minutes
-
-Variable d'indexation rapide : `INDEXNOW_KEY` (clé hébergée dans
-`web/public/indexnow.key.txt`, identique dans l'agent).
-
-> **Pourquoi pas une purge totale par défaut ?** Google ré-indexe et ré-évalue
-> chaque URL supprimée : un catalogue à 1-2 articles limite la profondeur du
-> sitemap. Le mode inventaire (40) fait tourner 100 % du contenu en ~20 h tout
-> en gardant un site dense. `CONTENT_MAX=0` reste disponible pour du 100 % purge.
+> IndexNow couvre **Bing, Yandex, Naver, Seznam** — **pas Google**. Pour Google, les leviers
+> sont le sitemap, robots.txt, le maillage interne et Search Console.
 
 ---
 
 ## 🎛️ Contrôle du site — `/admin`
 
-Dashboard protégé par `ADMIN_TOKEN` :
-- **Statut agent** : uptime, moteur IA, dernier cycle, taille de la base SQLite
-- **Fréquentation** : vues du jour (base interne) + GA4
-- **Bouton « Générer / optimiser maintenant »** → force un cycle immédiat
-- **Publication** : publier / dépublier chaque article en 1 clic
-- **Checklist SEO** : GA4, base, agent, scores, sitemap, données structurées
-- **Aperçu du mining** : les prochains mots-clés que l'agent va rédiger
+- **Statut agent** : état, moteur IA, dernier cycle, uptime, taille de la base
+- **Catalogue** : nombre d'articles conservés, publiés, score SEO moyen, mots publiés
+- **Bouton « Générer / optimiser maintenant »**
+- **Sauvegarde du catalogue** (téléchargement du seed à committer)
+- **Publication** : publier / dépublier chaque article
+- **Checklist SEO** : GA4, Search Console, base, agent, sitemap, données structurées
+- **Aperçu du mining** : les prochains mots-clés
+
+Jeton local par défaut : `dev-admin-token`.
 
 ---
 
-## 🌍 Stratégie SEO pour 1 000–5 000 visiteurs africains/jour
+## 🧩 Catégories éditoriales
 
-| Levier | Mise en œuvre |
+| Id | Catégorie |
 |---|---|
-| **Longue traîne locale** | L'agent mine `mot-clé + pays` (`comment Orange Money au Sénégal`, `freelance au Kenya`…) — volume faible × concurrence faible × milliers de combinaisons |
-| **5 piliers éditoriaux** | Mobile Money, IA gratuite, Emploi/Freelance, Business, Réseaux sociaux |
-| **SEO technique** | Sitemap XML, robots.txt, RSS, canonical, OG/Twitter cards, breadcrumbs, URL propres |
-| **Données structurées** | `Article` + `FAQPage` + `BreadcrumbList` + `WebSite` → éligibilité aux rich results |
-| **Fraîcheur** | L'agent rafraîchit les anciens articles (date, meta, liens) → bonus Google |
-| **Maillage interne** | Section « Articles liés » ajoutée automatiquement dans chaque article |
-| **Performance** | Next.js SSR, ~90 kB JS, Lighthouse élevé |
-| **Partage social** | Boutons WhatsApp/Facebook/X (WhatsApp = canal n°1 en Afrique) |
+| `religion` | Religion & Spiritualité |
+| `ia` | Intelligence Artificielle |
+| `emploi` | Emploi & Freelance |
+| `business` | Business & E-commerce |
+| `reseaux` | Réseaux sociaux & Astuces |
+| `fintech` | *Mobile Money — catégorie historique, conservée pour les anciens articles* |
 
-### Rythme de production
-`RUN_INTERVAL_MINUTES=30` → ~48 articles/jour max, réglable.
-Recommandé après lancement : **3–5 articles/jour** de qualité + 1 rafraîchissement SEO/cycle.
+Chaque catégorie possède son propre gabarit de contenu (sections, FAQ, points clés) afin
+d'éviter le contenu dupliqué entre thématiques.
 
 ---
 
 ## 🧪 Développement local
 
 ```bash
-# 1. agent (port 4100) — base SQLite créée automatiquement dans agent/data/
+# 1. agent (port 4000) — base SQLite créée automatiquement dans agent/data/
 cd agent && npm install && npm start
+#    déclencher un cycle à la demande :
+AGENT_URL=http://localhost:4000 npm run tick
 
 # 2. frontend (port 3000)
 cd web && npm install && npm run dev
-# → http://localhost:3000  — dashboard : http://localhost:3000/admin
-#   jeton admin local : dev-admin-token
+# → http://localhost:3000 — dashboard : http://localhost:3000/admin
 
 # contenu de démonstration sans serveur :
 cd agent && npm run demo
 
-# sauvegarde de la base :
-cp agent/data/seo-boss.db backup-$(date +%F).db
+# sauvegarde du catalogue (base → web/lib/seed.js) :
+cd agent && npm run export-seed
 ```
 
-## 🔐 Jetons
+## 🔐 Jetons & sécurité
 
 | Variable | Rôle |
 |---|---|
-| `AGENT_TOKEN` | authentifie les appels dashboard → agent (Render) |
+| `AGENT_TOKEN` | authentifie les appels de contrôle vers l'agent (Render) |
 | `ADMIN_TOKEN` | protège `/admin` et les routes `/api/agent/*` (Vercel) |
-| `DB_PATH` | emplacement de la base SQLite (défaut : `agent/data/seo-boss.db`) |
+| `CRON_SECRET` | protège `/api/cron/run` (déclencheur de cycle) |
+| `DB_PATH` | emplacement de la base SQLite |
+
+Les routes de contrôle de l'agent (`/run`, `/internal/*`, `/tasks`, `PATCH /articles/:slug`)
+exigent le jeton ; le CORS est restreint au domaine du site et les routes publiques
+d'écriture (`/views`) sont limitées en débit.
