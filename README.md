@@ -64,7 +64,9 @@ Le frontend a un repli : si l'agent est en veille → **seed embarqué** (le sit
 1. Render → **New → Blueprint** → sélectionner ce dépôt (le `render.yaml` est prêt)
 2. Variables à remplir :
    - `SITE_URL` = `https://buzzafrique.vercel.app` (déjà dans le render.yaml)
-   - `GROQ_API_KEY` → gratuite sur [console.groq.com](https://console.groq.com) (Llama 3.3 70B open-source) — *optionnel mais recommandé*
+   - `GROQ_API_KEY` → **clé à coller** dans Render → Environment (gratuite sur
+     [console.groq.com](https://console.groq.com), modèle Llama 3.3 70B open-source).
+     Sans clé, l'agent bascule automatiquement sur son moteur de rédaction local.
    - `AGENT_TOKEN` → généré automatiquement
 3. L'agent démarre, **crée sa base SQLite**, mine les mots-clés et publie son premier article en < 1 min.
 
