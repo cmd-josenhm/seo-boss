@@ -5,10 +5,8 @@ services:
     name: seo-boss-agent
     runtime: node
     rootDir: agent
-    # IMPORTANT : déployer la branche qui contient le code
-    # (le main du dépôt n'a que le README — sans ceci, Render build main => échec)
-    # → passer sur "main" après un éventuel merge
-    branch: arena/01a0ef96-seo-boss
+    # Déploie la branche principale (PR #1 mergée dans main)
+    branch: main
     autoDeploy: true
     buildCommand: npm install --no-audit --no-fund
     startCommand: npm start
