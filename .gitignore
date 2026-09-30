@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+build/
+dist/
+.env
+.env.local
+.env.*.local
+.vercel
+*.log
+.DS_Store
+agent/data/*.json
+agent/data/*.db
+agent/data/*.db-wal
+agent/data/*.db-shm
+!agent/data/.gitkeep
+coverage/
