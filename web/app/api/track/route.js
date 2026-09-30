@@ -1,25 +1,21 @@
 import { NextResponse } from 'next/server';
 
-const SUPA_URL = process.env.SUPABASE_URL || '';
-const SUPA_KEY = process.env.SUPABASE_ANON_KEY || '';
-const MAX_PATH = 200;
+const AGENT_URL = (process.env.AGENT_BASE_URL || '').replace(/\/$/, '');
 
-/** Beacon de suivi interne : alimente le compteur affiché dans /admin. */
+/**
+ * Beacon de suivi interne → base SQLite du backend (agent).
+ * Alimente le compteur de fréquentation affiché dans /admin.
+ */
 export async function POST(req) {
   try {
     const body = await req.json().catch(() => ({}));
-    const path = String(body?.path || '/').slice(0, MAX_PATH);
-    if (SUPA_URL && SUPA_KEY) {
-      const url = `${SUPA_URL}/rest/v1/page_views?on_conflict=path,day`;
-      await fetch(url, {
+    const path = String(body?.path || '/').slice(0, 200);
+    if (AGENT_URL) {
+      await fetch(`${AGENT_URL}/views`, {
         method: 'POST',
-        headers: {
-          apikey: SUPA_KEY,
-          Authorization: `Bearer ${SUPA_KEY}`,
-          'Content-Type': 'application/json',
-          Prefer: 'resolution=merge-duplicates,return=minimal',
-        },
-        body: JSON.stringify([{ path, day: new Date().toISOString().slice(0, 10), views: 1 }]),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+        signal: AbortSignal.timeout(4000),
       });
     }
   } catch {

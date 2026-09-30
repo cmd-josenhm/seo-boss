@@ -28,16 +28,15 @@ app.get('/health', (_req, res) => res.json({ ok: true, uptime: Date.now() - star
 // Statut global pour /admin
 app.get('/status', async (_req, res) => {
   try {
-    const [tasks, runs, articles] = await Promise.all([
-      store.listTasks({ limit: 300 }),
+    const [runs, stats, views] = await Promise.all([
       store.listRuns(15),
-      store.listArticles({ limit: 500 }),
+      store.stats(),
+      store.getViews({ days: 7 }),
     ]);
-    const pending = tasks.filter((t) => t.status === 'pending').length;
-    const failed = tasks.filter((t) => t.status === 'failed').length;
     res.json({
       ok: true,
       mode: store.mode(),
+      database: store.info(),
       provider: activeProviderName(),
       running: isRunning(),
       uptime_s: Math.round((Date.now() - startedAt) / 1000),
@@ -45,11 +44,13 @@ app.get('/status', async (_req, res) => {
       auto_publish: config.autoPublish,
       site_url: config.siteUrl,
       counts: {
-        articles: articles.length,
-        published: articles.filter((a) => a.status === 'published').length,
-        pending_tasks: pending,
-        failed_tasks: failed,
+        articles: stats.articles,
+        published: stats.published,
+        pending_tasks: stats.tasks_pending,
+        failed_tasks: stats.tasks_failed,
+        db_size_kb: stats.db_size_kb,
       },
+      traffic: views,
       last_runs: runs,
       categories: Object.entries(CATEGORIES).map(([k, v]) => ({ id: k, label: v.label })),
     });
@@ -70,7 +71,7 @@ app.post('/internal/run', async (req, res) => {
   res.json(result);
 });
 
-// Articles (utilisé par le frontend en fallback Supabase)
+// Articles (servis au frontend depuis la base SQLite du backend)
 app.get('/articles', async (req, res) => {
   const rows = await store.listArticles({
     status: req.query.status === 'all' ? undefined : req.query.status || 'published',
@@ -120,6 +121,27 @@ app.post('/internal/reset-tasks', async (_req, res) => {
   res.json({ cleared: await resetTasks() });
 });
 
+// ---------------- Vues (compteur interne de fréquentation) ----------------
+// Beacon public envoyé par le frontend (best-effort)
+app.post('/views', async (req, res) => {
+  try {
+    await store.addView(req.body?.path || '/');
+  } catch (e) {
+    console.warn('[views]', e.message);
+  }
+  res.status(204).end();
+});
+
+// Statistiques de fréquentation (dashboard /admin)
+app.get('/views', auth, async (req, res) => {
+  try {
+    const days = Math.min(parseInt(req.query.days || '7', 10), 90);
+    res.json(await store.getViews({ days }));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ---------------- Scheduler 24h/24 ----------------
 async function tick() {
   if (isRunning()) return;
@@ -132,6 +154,13 @@ async function tick() {
 
 async function main() {
   await store.init();
+  // sécurité : une erreur de requête ne doit jamais tuer le service 24/24
+  process.on('uncaughtException', (e) => console.error('[uncaught]', e));
+  process.on('unhandledRejection', (e) => console.error('[unhandled]', e));
+  app.use((err, _req, res, _next) => {
+    console.error('[express]', err);
+    res.status(500).json({ error: err.message });
+  });
   app.listen(config.port, '0.0.0.0', () => {
     console.log(`\n🤖 SEO BOSS agent — port ${config.port}`);
     console.log(`   stockage : ${store.mode()}`);

@@ -10,5 +10,8 @@ dist/
 *.log
 .DS_Store
 agent/data/*.json
+agent/data/*.db
+agent/data/*.db-wal
+agent/data/*.db-shm
 !agent/data/.gitkeep
 coverage/

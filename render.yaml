@@ -1,4 +1,4 @@
-# Render — service backend de l'agent IA (24h/24)
+# Render — service backend de l'agent IA (24h/24) + base de données intégrée
 # https://render.com/docs/blueprint-spec
 services:
   - type: web
@@ -16,10 +16,10 @@ services:
         generateValue: true
       - key: SITE_URL
         value: https://buzzafrique.example
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SERVICE_KEY
-        sync: false
+      # Base de données SQLite intégrée (aucun service externe).
+      # Sur un plan payant Render, attacher un Disk et définir :
+      # - key: DB_PATH
+      #   value: /var/data/seo-boss.db
       - key: GROQ_API_KEY
         sync: false
       - key: OPENROUTER_API_KEY

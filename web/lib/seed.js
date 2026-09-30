@@ -1,4 +1,4 @@
-// Généré automatiquement par agent/src/demo.js — contenu de secours du site (fallback hors Supabase)
+// Généré automatiquement par agent/src/demo.js — contenu de secours du site (fallback hors-ligne)
 export const SEED_ARTICLES = [
   {
     "slug": "chatgpt-guide-complet-au-rwanda",

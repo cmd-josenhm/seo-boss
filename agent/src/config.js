@@ -18,12 +18,6 @@ export const config = {
   lang: env('AGENT_LANG', 'fr'),
   maxRunsKeep: 50,
 
-  supabase: {
-    url: env('SUPABASE_URL'),
-    serviceKey: env('SUPABASE_SERVICE_KEY') || env('SUPABASE_KEY'),
-    anonKey: env('SUPABASE_ANON_KEY'),
-  },
-
   // Chaîne de modèles LLM open-source (gratuits) — ordre de priorité
   providers: {
     ollama: { url: env('OLLAMA_URL'), model: env('OLLAMA_MODEL', 'llama3.1:8b') },
@@ -38,5 +32,3 @@ export const config = {
     },
   },
 };
-
-export const hasSupabase = () => Boolean(config.supabase.url && config.supabase.serviceKey);

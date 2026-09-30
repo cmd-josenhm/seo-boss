@@ -10,7 +10,7 @@ export async function GET() {
     site: {
       ga_connected: Boolean(process.env.NEXT_PUBLIC_GA_ID),
       ga_id: process.env.NEXT_PUBLIC_GA_ID || '',
-      supabase_connected: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY),
+      database: 'backend-intégré (SQLite)', // plus de Supabase
       agent_configured: Boolean(AGENT_URL),
       site_url: process.env.NEXT_PUBLIC_SITE_URL || '',
     },

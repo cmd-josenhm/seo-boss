@@ -143,6 +143,14 @@ export default function AdminPage() {
           <div className="k">Mots publiés</div>
         </div>
         <div className="stat">
+          <div className="v">{agent?.traffic?.today ?? '—'}</div>
+          <div className="k">Vues aujourd’hui</div>
+        </div>
+        <div className="stat">
+          <div className="v">{agent?.counts?.db_size_kb != null ? `${agent.counts.db_size_kb} KB` : '—'}</div>
+          <div className="k">Base SQLite</div>
+        </div>
+        <div className="stat">
           <div className="v">{fmtUptime(agent?.uptime_s)}</div>
           <div className="k">Uptime agent</div>
         </div>
@@ -176,7 +184,11 @@ export default function AdminPage() {
         <table className="list">
           <tbody>
             <Row ok={site.ga_connected} label="Google Analytics 4 connecté" hint="NEXT_PUBLIC_GA_ID (G-…)" />
-            <Row ok={site.supabase_connected} label="Base Supabase connectée" hint="SUPABASE_URL + ANON_KEY" />
+            <Row
+              ok={Boolean(agent)}
+              label="Base de données du backend"
+              hint={agent?.database ? `${agent.database.engine} (${agent.database.path}) — ${agent?.counts?.db_size_kb ?? '—'} KB` : 'SQLite intégré à l’agent (Render)'}
+            />
             <Row ok={site.agent_configured} label="Agent IA connecté" hint="AGENT_BASE_URL (Render)" />
             <Row ok={(agent?.counts?.published || 0) > 0} label="Contenu publié" hint="au moins 1 article en ligne" />
             <Row ok={avgSeo >= 70} label="Score SEO moyen ≥ 70" hint={`actuel : ${avgSeo || 0}`} />
